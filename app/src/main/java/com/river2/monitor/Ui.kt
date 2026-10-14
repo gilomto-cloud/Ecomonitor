@@ -136,7 +136,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
-    val tabs = listOf("Home" to "🔋", "Solar & AC" to "☀", "History" to "📈", "Raw" to "📋")
+    val tabs = listOf("Home" to "🔋", "Controls" to "🎛", "Solar & AC" to "☀", "History" to "📈", "Raw" to "📋")
 
     Scaffold(
         topBar = {
@@ -171,9 +171,10 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             when (tab) {
-                0 -> Dashboard(ui)
-                1 -> SolarAc(ui, store)
-                2 -> HistoryScreen(ui)
+                0 -> Dashboard(ui, store)
+                1 -> Controls(ui, store)
+                2 -> SolarAc(ui, store)
+                3 -> HistoryScreen(ui)
                 else -> RawScreen(ui)
             }
         }
@@ -230,9 +231,16 @@ fun Gauge(s: Summary?) {
 }
 
 @Composable
-fun Dashboard(ui: UiState) {
+fun Dashboard(ui: UiState, store: Store) {
     val s = ui.summary
     val e = ui.energy
+    val price = store.price.toDouble()
+    val cur = store.currency
+    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000) * price) else "set price in ⚙"
+
+    val savedTodayStr = if (price > 0) "${money(e.todaySolar)} (${fmtWh(e.todaySolar)})" else money(e.todaySolar)
+    val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else money(e.totalSolar)
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -250,6 +258,7 @@ fun Dashboard(ui: UiState) {
                 "Cycles / health" to "${fmt(s?.cycles)} / ${fmt(s?.soh, "%")}",
                 "Pack V / A" to "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}",
                 "☀ Solar today" to fmtWh(e.todaySolar), "🔌 AC used today" to fmtWh(e.todayAc),
+                "🌱 Saved today" to savedTodayStr, "💰 Total saved" to totalSavedStr,
             ),
         )
     }
@@ -459,6 +468,7 @@ fun Controls(ui: UiState, store: Store) {
 fun RawScreen(ui: UiState) {
     var q by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(ui.raw.isEmpty()) }
+    @Suppress("DEPRECATION")
     val clip = LocalClipboardManager.current
     if (showLog) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
