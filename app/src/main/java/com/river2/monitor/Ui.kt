@@ -1,7 +1,9 @@
 package com.river2.monitor
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,28 +11,42 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,7 +58,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -59,12 +77,13 @@ import kotlinx.coroutines.flow.update
 import java.util.Locale
 import kotlin.math.max
 
-private val GREEN = Color(0xFF2ECC71)
-private val YELLOW = Color(0xFFF1C40F)
-private val RED = Color(0xFFE74C3C)
-private val BLUE = Color(0xFF3DA5FF)
-private val ORANGE = Color(0xFFFF9F43)
-private val PURPLE = Color(0xFFB07CFF)
+// Tech Giant Premium Color Palette
+private val EMERALD = Color(0xFF10B981)
+private val CYAN = Color(0xFF38BDF8)
+private val AMBER = Color(0xFFF59E0B)
+private val ORANGE = Color(0xFFF97316)
+private val INDIGO = Color(0xFF818CF8)
+private val CRIMSON = Color(0xFFEF4444)
 
 @Composable
 fun App(store: Store) {
@@ -84,47 +103,104 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
     var sn by remember { mutableStateOf(store.sn) }
     var region by remember { mutableStateOf(store.region) }
     var model by remember { mutableStateOf(store.model) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Spacer(Modifier.size(24.dp))
-        Text("EcoFlow River 2", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            "Sign in with your EcoFlow app account. Credentials are stored encrypted on this phone " +
-                "and only sent to EcoFlow.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        OutlinedTextField(email, { email = it }, label = { Text("EcoFlow email") },
-            singleLine = true, modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-        OutlinedTextField(pw, { pw = it }, label = { Text("EcoFlow password") },
-            singleLine = true, modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation())
-        OutlinedTextField(sn, { sn = it.trim() }, label = { Text("Device serial number (SN)") },
-            singleLine = true, modifier = Modifier.fillMaxWidth())
-        Text("Region (must match your EcoFlow account)")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Global", "Europe").forEach { r ->
-                FilterChip(selected = region == r, onClick = { region = r }, label = { Text(r) })
+
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(32.dp))
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⚡", fontSize = 28.sp)
+            }
+            Text("EcoFlow River 2", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Sign in with your EcoFlow app account to connect directly to your River 2 power station.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        email, { email = it }, label = { Text("EcoFlow email") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    )
+                    OutlinedTextField(
+                        pw, { pw = it }, label = { Text("EcoFlow password") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    OutlinedTextField(
+                        sn, { sn = it.trim() }, label = { Text("Device Serial Number (SN)") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Text("Region", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Global", "Europe").forEach { r ->
+                            FilterChip(
+                                selected = region == r, onClick = { region = r }, label = { Text(r) },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            )
+                        }
+                    }
+
+                    Text("Device Model", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MODELS.keys.forEach { m ->
+                            FilterChip(
+                                selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 12.sp) },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = {
+                    store.email = email.trim(); store.password = pw; store.sn = sn
+                    store.region = region; store.model = model
+                    MonitorService.start(ctx)
+                    onDone()
+                },
+                enabled = email.isNotBlank() && pw.isNotEmpty() && sn.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EMERALD, contentColor = Color.Black)
+            ) {
+                Text("Connect Power Station", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
-        Text("Model")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MODELS.keys.forEach { m ->
-                FilterChip(selected = model == m, onClick = { model = m }, label = { Text(m) })
-            }
-        }
-        Button(
-            onClick = {
-                store.email = email.trim(); store.password = pw; store.sn = sn
-                store.region = region; store.model = model
-                MonitorService.start(ctx)
-                onDone()
-            },
-            enabled = email.isNotBlank() && pw.isNotEmpty() && sn.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Connect") }
     }
 }
 
@@ -136,45 +212,114 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
-    val tabs = listOf("Home" to "🔋", "Controls" to "🎛", "Solar & AC" to "☀", "History" to "📈", "Raw" to "📋")
+    val tabs = listOf(
+        "Home" to "⚡",
+        "Solar & AC" to "☀",
+        "History" to "📈",
+        "Raw" to "📋"
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                ),
                 title = {
-                    Column {
-                        Text("River 2", fontWeight = FontWeight.Bold)
-                        Text(ui.status, fontSize = 11.sp, maxLines = 2)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("River 2", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                                // Live Connection Dot Pill
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (ui.connected) EMERALD.copy(alpha = 0.15f) else CRIMSON.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, if (ui.connected) EMERALD.copy(alpha = 0.4f) else CRIMSON.copy(alpha = 0.4f)),
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .size(7.dp)
+                                                .clip(CircleShape)
+                                                .background(if (ui.connected) EMERALD else CRIMSON)
+                                        )
+                                        Text(
+                                            if (ui.connected) "LIVE" else "OFFLINE",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (ui.connected) EMERALD else CRIMSON
+                                        )
+                                    }
+                                }
+                            }
+                            Text(ui.status, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
                     }
                 },
                 actions = {
-                    TextButton({ MonitorService.start(ctx) }) { Text("⟳") }
-                    TextButton({ showSettings = true }) { Text("⚙") }
-                    TextButton({
-                        ctx.stopService(Intent(ctx, MonitorService::class.java))
-                        store.password = ""
-                        onLogout()
-                    }) { Text("⏻") }
+                    Surface(
+                        onClick = { MonitorService.start(ctx) },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) { Text("⟳", fontSize = 18.sp) }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        onClick = { showSettings = true },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) { Text("⚙", fontSize = 18.sp) }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        onClick = {
+                            ctx.stopService(Intent(ctx, MonitorService::class.java))
+                            store.password = ""
+                            onLogout()
+                        },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) { Text("⏻", fontSize = 16.sp, color = CRIMSON) }
+                    }
+                    Spacer(Modifier.width(12.dp))
                 },
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+            ) {
                 tabs.forEachIndexed { i, (name, icon) ->
                     NavigationBarItem(
                         selected = tab == i, onClick = { tab = i },
-                        icon = { Text(icon) }, label = { Text(name, fontSize = 10.sp, maxLines = 1) },
+                        icon = { Text(icon, fontSize = 18.sp) },
+                        label = { Text(name, fontSize = 10.sp, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        )
                     )
                 }
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        Box(Modifier.padding(pad).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             when (tab) {
                 0 -> Dashboard(ui, store)
-                1 -> Controls(ui, store)
-                2 -> SolarAc(ui, store)
-                3 -> HistoryScreen(ui)
+                1 -> SolarAc(ui, store)
+                2 -> HistoryScreen(ui)
                 else -> RawScreen(ui)
             }
         }
@@ -183,49 +328,99 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
 }
 
 @Composable
-fun Tile(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+fun MetricTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    subValue: String? = null,
+    accentColor: Color? = null,
+) {
+    Card(
+        modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = accentColor ?: MaterialTheme.colorScheme.onSurface)
+            if (subValue != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(subValue, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
 @Composable
-fun TileGrid(items: List<Pair<String, String>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items.chunked(2).forEach { r ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                r.forEach { (l, v) -> Tile(l, v, Modifier.weight(1f)) }
-                if (r.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
+fun SectionHeader(title: String) {
+    Text(
+        title.uppercase(Locale.US),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 1.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
+    )
 }
 
 // ===================================================================== dashboard
 @Composable
 fun Gauge(s: Summary?) {
     val soc = s?.soc
-    val track = MaterialTheme.colorScheme.surfaceVariant
-    val col = when {
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val activeColor = when {
         soc == null -> Color.Gray
-        soc <= 15 -> RED
-        soc <= 30 -> YELLOW
-        else -> GREEN
+        soc <= 15 -> CRIMSON
+        soc <= 30 -> AMBER
+        else -> EMERALD
     }
-    val (label, mins) = s?.eta() ?: ("" to null)
-    Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(16.dp)) {
-            val st = Stroke(width = 28f, cap = StrokeCap.Round)
-            drawArc(track, 135f, 270f, false, style = st)
-            if (soc != null) drawArc(col, 135f, 270f * (soc / 100).toFloat(), false, style = st)
+    val (label, mins) = s?.eta() ?: ("Idle" to null)
+    val net = s?.net ?: 0.0
+
+    Box(Modifier.size(240.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize().padding(18.dp)) {
+            val strokeWidth = 26f
+            val st = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            // Background track arc
+            drawArc(trackColor, 135f, 270f, false, style = st)
+            // Active gauge arc
+            if (soc != null) {
+                drawArc(activeColor, 135f, 270f * (soc.toFloat() / 100f), false, style = st)
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(fmt(soc, "%"), fontSize = 44.sp, fontWeight = FontWeight.Bold)
-            Text(if (mins == null) label else "${fmtMin(mins)} $label",
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(fmt(soc, "%"), fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+            Text("BATTERY LEVEL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+            Spacer(Modifier.height(8.dp))
+
+            // Time Remaining Pill Badge
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Text(
+                    if (mins == null) label else "${fmtMin(mins)} $label",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+
+            // Power Flow Net Status
+            if (s != null && kotlin.math.abs(net) >= 3) {
+                Spacer(Modifier.height(6.dp))
+                val isCharging = net > 0
+                Text(
+                    text = if (isCharging) "▲ Charging +${net.toInt()} W" else "▼ Discharging ${net.toInt()} W",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCharging) EMERALD else ORANGE
+                )
+            }
         }
     }
 }
@@ -242,34 +437,112 @@ fun Dashboard(ui: UiState, store: Store) {
     val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else money(e.totalSolar)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Gauge(s)
-        TileGrid(
-            listOf(
-                "Total input" to fmt(s?.inW, " W"), "Total output" to fmt(s?.outW, " W"),
-                "Net power" to (if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net)),
-                "Stored" to (if (s == null) "—" else "${fmt(s.storedWh)} / ${fmt(s.capWh)} Wh"),
-                "☀ Solar in" to fmt(s?.solar, " W"), "🔌 AC in" to fmt(s?.acIn, " W"),
-                "AC out" to fmt(s?.acOut, " W"), "12V DC out" to fmt(s?.car, " W"),
-                "USB out" to fmt(s?.usb, " W"), "Battery temp" to fmt(s?.temp, " °C"),
-                "Cycles / health" to "${fmt(s?.cycles)} / ${fmt(s?.soh, "%")}",
-                "Pack V / A" to "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}",
-                "☀ Solar today" to fmtWh(e.todaySolar), "🔌 AC used today" to fmtWh(e.todayAc),
-                "🌱 Saved today" to savedTodayStr, "💰 Total saved" to totalSavedStr,
-            ),
-        )
+        // Hero Battery Gauge Card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                Gauge(s)
+            }
+        }
+
+        // Hero Savings Card (Feature Highlight)
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            border = BorderStroke(1.dp, EMERALD.copy(alpha = 0.4f)),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(EMERALD.copy(alpha = 0.12f), CYAN.copy(alpha = 0.05f))
+                        )
+                    )
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("🌱", fontSize = 16.sp)
+                        Text("ELECTRICITY SAVED (SOLAR)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EMERALD, letterSpacing = 1.sp)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Saved Today", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(savedTodayStr, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = EMERALD)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Total Savings", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(totalSavedStr, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 1: Power Overview
+        SectionHeader("Power Summary")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("TOTAL INPUT", fmt(s?.inW, " W"), Modifier.weight(1f), accentColor = CYAN)
+            MetricTile("TOTAL OUTPUT", fmt(s?.outW, " W"), Modifier.weight(1f), accentColor = ORANGE)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("NET POWER", if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net), Modifier.weight(1f))
+            MetricTile("STORED ENERGY", if (s == null) "—" else "${fmt(s.storedWh)} / ${fmt(s.capWh)} Wh", Modifier.weight(1f))
+        }
+
+        // Section 2: Input & Output Breakdown
+        SectionHeader("Input & Output Sources")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("☀ SOLAR IN", fmt(s?.solar, " W"), Modifier.weight(1f), accentColor = AMBER)
+            MetricTile("🔌 AC IN", fmt(s?.acIn, " W"), Modifier.weight(1f), accentColor = INDIGO)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("AC OUTPUT", fmt(s?.acOut, " W"), Modifier.weight(1f))
+            MetricTile("12V DC OUT", fmt(s?.car, " W"), Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("USB OUT", fmt(s?.usb, " W"), Modifier.weight(1f))
+            MetricTile("BATTERY TEMP", fmt(s?.temp, " °C"), Modifier.weight(1f))
+        }
+
+        // Section 3: Battery Health
+        SectionHeader("Battery Health")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile("CYCLES / HEALTH", "${fmt(s?.cycles)} / ${fmt(s?.soh, "%")}", Modifier.weight(1f))
+            MetricTile("PACK V / A", "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}", Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 
 // ===================================================================== solar & ac
 @Composable
 fun RowKV(k: String, v: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(k)
-        Text(v, fontWeight = FontWeight.Bold)
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(k, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(v, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 }
 
@@ -281,49 +554,87 @@ fun SolarAc(ui: UiState, store: Store) {
     val cur = store.currency
     fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, wh / 1000 * price) else "set price in ⚙"
     val tot = e.todaySolar + e.todayAc
+    val solarPct = if (tot > 0) (e.todaySolar / tot).toFloat() else 0f
+
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text("☀  Solar panel", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                RowKV("Producing now", fmt(s?.solar, " W"))
-                RowKV("Panel voltage", fmt(s?.solarV, " V", 1))
-                RowKV("Panel current", fmt(s?.solarA, " A", 2))
-                RowKV("Peak today", fmt(e.peakSolar, " W"))
-                RowKV("Produced today", fmtWh(e.todaySolar))
-                RowKV("Produced this session", fmtWh(e.sessSolar))
-                RowKV("Produced (total in app)", fmtWh(e.totalSolar))
-                RowKV("Sun hours today", fmtHms(e.solarSecs))
-                RowKV("Value today", money(e.todaySolar))
-                RowKV("Solar share of input today", if (tot > 0) fmt(100 * e.todaySolar / tot, "%") else "—")
+        // Solar Panel Card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, AMBER.copy(alpha = 0.4f)),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("☀", fontSize = 20.sp)
+                    Text("Solar Panel", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AMBER)
+                }
+                Spacer(Modifier.height(12.dp))
+                RowKV("Producing Now", fmt(s?.solar, " W"))
+                RowKV("Panel Voltage", fmt(s?.solarV, " V", 1))
+                RowKV("Panel Current", fmt(s?.solarA, " A", 2))
+                RowKV("Peak Today", fmt(e.peakSolar, " W"))
+                RowKV("Produced Today", fmtWh(e.todaySolar))
+                RowKV("Produced This Session", fmtWh(e.sessSolar))
+                RowKV("Total Solar Produced", fmtWh(e.totalSolar))
+                RowKV("Sun Hours Today", fmtHms(e.solarSecs))
+                RowKV("Solar Value Today", money(e.todaySolar))
+
+                Spacer(Modifier.height(8.dp))
+                Text("Solar Share of Input Today", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { solarPct },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                    color = AMBER,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
             }
         }
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text("🔌  AC charging (wall)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                RowKV("Drawing now", fmt(s?.acIn, " W"))
-                RowKV("AC voltage", fmt(s?.acInV, " V"))
-                RowKV("AC frequency", fmt(s?.acInF, " Hz"))
-                RowKV("Charging from AC?", if ((s?.acIn ?: 0.0) > 5) "Yes" else "No")
-                RowKV("Used today", fmtWh(e.todayAc))
-                RowKV("Used this session", fmtWh(e.sessAc))
-                RowKV("Used (total in app)", fmtWh(e.totalAc))
-                RowKV("AC charging time today", fmtHms(e.acSecs))
-                RowKV("Cost today", money(e.todayAc))
-                RowKV("Cost total", money(e.totalAc))
+
+        // AC Charging Card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, INDIGO.copy(alpha = 0.4f)),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("🔌", fontSize = 20.sp)
+                    Text("AC Wall Charging", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = INDIGO)
+                }
+                Spacer(Modifier.height(12.dp))
+                RowKV("Drawing Now", fmt(s?.acIn, " W"))
+                RowKV("AC Voltage", fmt(s?.acInV, " V"))
+                RowKV("AC Frequency", fmt(s?.acInF, " Hz"))
+                RowKV("AC Active?", if ((s?.acIn ?: 0.0) > 5) "Yes" else "No")
+                RowKV("Used Today", fmtWh(e.todayAc))
+                RowKV("Used This Session", fmtWh(e.sessAc))
+                RowKV("Total AC Used", fmtWh(e.totalAc))
+                RowKV("Charging Time Today", fmtHms(e.acSecs))
+                RowKV("AC Cost Today", money(e.todayAc))
+                RowKV("AC Cost Total", money(e.totalAc))
             }
         }
-        Text(
-            "Energy is measured by the app (power × time) while it runs. Time when the app " +
-                "service is stopped is not counted.",
-            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text("Daily totals", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                RowKV("Date  (solar / AC / in / out)", "")
+
+        // Daily Totals Card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                RowKV("Date (solar / AC / in / out)", "")
                 e.days.keys.sortedDescending().take(30).forEach { d ->
                     val r = e.days.getValue(d)
                     RowKV(d, "${fmtWh(r[0])} / ${fmtWh(r[1])} / ${fmtWh(r[2])} / ${fmtWh(r[3])}")
@@ -337,128 +648,75 @@ fun SolarAc(ui: UiState, store: Store) {
 @Composable
 fun HistoryScreen(ui: UiState) {
     var hours by remember { mutableIntStateOf(1) }
-    val axis = MaterialTheme.colorScheme.outlineVariant
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
+    val axisColor = MaterialTheme.colorScheme.outlineVariant
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Power History", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1, 6, 24).forEach { h ->
-                FilterChip(selected = hours == h, onClick = { hours = h }, label = { Text("${h}h") })
+                FilterChip(
+                    selected = hours == h, onClick = { hours = h }, label = { Text("${h}h") },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
-            Text("● Battery %", color = GREEN, fontSize = 12.sp)
-            Text("● In W", color = BLUE, fontSize = 12.sp)
-            Text("● Out W", color = ORANGE, fontSize = 12.sp)
-            Text("● Solar W", color = RED, fontSize = 12.sp)
-            Text("● AC W", color = PURPLE, fontSize = 12.sp)
+
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("● Battery", color = EMERALD, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("● In W", color = CYAN, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("● Out W", color = ORANGE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("● Solar W", color = AMBER, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("● AC W", color = INDIGO, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
+
         val now = System.currentTimeMillis()
         val t0 = now - hours * 3_600_000L
         val pts = ui.history.filter { it.t >= t0 }
-        Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp)) {
-            for (i in 0..4) {
-                val y = size.height * i / 4
-                drawLine(axis, Offset(0f, y), Offset(size.width, y), 1f)
-            }
-            if (pts.size < 2) return@Canvas
-            val wMax = max(100.0, pts.maxOf {
-                maxOf(it.inW ?: 0.0, it.outW ?: 0.0, it.solar ?: 0.0, it.acIn ?: 0.0)
-            })
-            fun line(color: Color, top: Double, get: (Sample) -> Double?) {
-                val path = Path()
-                var started = false
-                for (p in pts) {
-                    val v = get(p) ?: continue
-                    val x = ((p.t - t0).toFloat() / (now - t0)) * size.width
-                    val y = size.height * (1f - (v.coerceIn(0.0, top) / top).toFloat())
-                    if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+        val wMax = if (pts.isEmpty()) 100.0 else max(100.0, pts.maxOf {
+            maxOf(it.inW ?: 0.0, it.outW ?: 0.0, it.solar ?: 0.0, it.acIn ?: 0.0)
+        })
+
+        Card(
+            Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Canvas(Modifier.fillMaxSize().padding(16.dp)) {
+                for (i in 0..4) {
+                    val y = size.height * i / 4
+                    drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
                 }
-                drawPath(path, color, style = Stroke(width = 4f))
+                if (pts.size < 2) return@Canvas
+                fun line(color: Color, top: Double, get: (Sample) -> Double?) {
+                    val path = Path()
+                    var started = false
+                    for (p in pts) {
+                        val v = get(p) ?: continue
+                        val x = ((p.t - t0).toFloat() / (now - t0)) * size.width
+                        val y = size.height * (1f - (v.coerceIn(0.0, top) / top).toFloat())
+                        if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+                    }
+                    drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                }
+                line(EMERALD, 100.0) { it.soc }
+                line(CYAN, wMax) { it.inW }
+                line(ORANGE, wMax) { it.outW }
+                line(AMBER, wMax) { it.solar }
+                line(INDIGO, wMax) { it.acIn }
             }
-            line(GREEN, 100.0) { it.soc }
-            line(BLUE, wMax) { it.inW }
-            line(ORANGE, wMax) { it.outW }
-            line(RED, wMax) { it.solar }
-            line(PURPLE, wMax) { it.acIn }
         }
+        Spacer(Modifier.height(8.dp))
         Text(
-            "Left scale 0–100% for battery, watts scaled to the highest value in view.",
+            "Scale: Battery % (0–100%), Watts scaled to max value in view (${wMax.toInt()} W).",
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-// ===================================================================== controls
-@Composable
-fun Controls(ui: UiState, store: Store) {
-    var pending by remember { mutableStateOf<Pair<Cmd, Int>?>(null) }
-    val maxAcWatts = when (store.model) {
-        "River 2 Max" -> 660
-        "River 2 Pro" -> 940
-        else -> 360
-    }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            "⚠ Control commands are sent via EcoFlow cloud MQTT. Check the unit or Raw > Log tab to see responses.",
-            color = YELLOW, fontSize = 13.sp,
-        )
-        if (!ui.connected) {
-            Text("⚠ Not connected to EcoFlow cloud. Controls require an active connection.", color = RED, fontSize = 13.sp)
-        }
-        COMMANDS.forEach { c ->
-            key(c.id) {
-                val hi = if (c.id == "ac_chg") maxAcWatts else c.hi
-                if (c.toggle) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(c.label, Modifier.weight(1f), fontSize = 16.sp)
-                        Button({ pending = c to 1 }, enabled = ui.connected) { Text("ON") }
-                        Spacer(Modifier.width(8.dp))
-                        Button({ pending = c to 0 }, enabled = ui.connected) { Text("OFF") }
-                    }
-                } else {
-                    var v by remember { mutableFloatStateOf(c.def.coerceIn(c.lo, hi).toFloat()) }
-                    Column {
-                        Text("${c.label}: ${v.toInt()} ${c.unit}", fontSize = 16.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Slider(
-                                v, { v = it }, Modifier.weight(1f),
-                                valueRange = c.lo.toFloat()..hi.toFloat(),
-                                steps = max(0, (hi - c.lo) / c.step - 1),
-                                enabled = ui.connected,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Button({ pending = c to v.toInt() }, enabled = ui.connected) { Text("Apply") }
-                        }
-                    }
-                }
-            }
-        }
-        if (ui.cmdResult.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth()) {
-                Text(ui.cmdResult, Modifier.padding(12.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-    pending?.let { (c, v) ->
-        AlertDialog(
-            onDismissRequest = { pending = null },
-            title = { Text("Confirm") },
-            text = { Text("Send '${c.label}' = $v to the River 2?") },
-            confirmButton = {
-                TextButton({
-                    val sender = Repo.sender
-                    if (sender == null) {
-                        Repo.state.update { it.copy(cmdResult = "✗ Service not connected. Ensure app is signed in.") }
-                    } else {
-                        sender(c.body(store.sn, v))
-                    }
-                    pending = null
-                }) { Text("Send") }
-            },
-            dismissButton = { TextButton({ pending = null }) { Text("Cancel") } },
         )
     }
 }
@@ -470,36 +728,56 @@ fun RawScreen(ui: UiState) {
     var showLog by remember { mutableStateOf(ui.raw.isEmpty()) }
     @Suppress("DEPRECATION")
     val clip = LocalClipboardManager.current
-    if (showLog) {
-        Column(Modifier.fillMaxSize().padding(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = false, onClick = { showLog = false }, label = { Text("Values") })
-                FilterChip(selected = true, onClick = {}, label = { Text("Log") })
-                TextButton({ clip.setText(AnnotatedString(ui.debug.joinToString("\n"))) }) { Text("Copy log") }
-            }
-            Text("Connection log (newest first). Passwords are never logged.",
-                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LazyColumn(Modifier.padding(top = 6.dp)) {
-                items(ui.debug) { line -> Text(line, fontSize = 10.sp, modifier = Modifier.padding(vertical = 2.dp)) }
-            }
-        }
-        return
-    }
-    val rows = ui.raw.entries.sortedBy { it.key }.filter {
-        q.isBlank() || it.key.contains(q, true) || it.value.toString().contains(q, true)
-    }
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = true, onClick = {}, label = { Text("Values") })
-            FilterChip(selected = false, onClick = { showLog = true }, label = { Text("Log") })
+            FilterChip(
+                selected = !showLog, onClick = { showLog = false }, label = { Text("Values") },
+                shape = RoundedCornerShape(20.dp)
+            )
+            FilterChip(
+                selected = showLog, onClick = { showLog = true }, label = { Text("Log") },
+                shape = RoundedCornerShape(20.dp)
+            )
+            if (showLog) {
+                Spacer(Modifier.weight(1f))
+                TextButton({ clip.setText(AnnotatedString(ui.debug.joinToString("\n"))) }) { Text("Copy Log") }
+            }
         }
-        OutlinedTextField(q, { q = it }, label = { Text("Filter") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth())
-        LazyColumn(Modifier.padding(top = 8.dp)) {
+
+        Spacer(Modifier.height(10.dp))
+
+        if (showLog) {
+            Text("Connection log (newest first). Credentials are masked.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LazyColumn(Modifier.padding(top = 8.dp)) {
+                items(ui.debug) { line ->
+                    Text(line, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            return
+        }
+
+        val rows = ui.raw.entries.sortedBy { it.key }.filter {
+            q.isBlank() || it.key.contains(q, true) || it.value.toString().contains(q, true)
+        }
+
+        OutlinedTextField(
+            q, { q = it }, label = { Text("Filter MQTT parameters") }, singleLine = true,
+            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+        )
+
+        LazyColumn(Modifier.padding(top = 10.dp)) {
             items(rows) { r ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(r.key, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    Text(r.value.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Card(
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(r.key, fontSize = 12.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(r.value.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
         }
@@ -521,17 +799,23 @@ fun SettingsDialog(store: Store, onClose: () -> Unit) {
 
     @Composable
     fun field(label: String, v: String, set: (String) -> Unit, kb: KeyboardOptions = num) =
-        OutlinedTextField(v, set, label = { Text(label) }, singleLine = true,
-            keyboardOptions = kb, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(
+            v, set, label = { Text(label) }, singleLine = true,
+            shape = RoundedCornerShape(12.dp), keyboardOptions = kb, modifier = Modifier.fillMaxWidth()
+        )
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Settings") },
+        title = { Text("App & Device Settings", fontWeight = FontWeight.Bold) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MODELS.keys.forEach { m ->
-                        FilterChip(selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) })
+                        FilterChip(
+                            selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
+                            shape = RoundedCornerShape(16.dp)
+                        )
                     }
                 }
                 field("Electricity price per kWh", price, { price = it }, KeyboardOptions(keyboardType = KeyboardType.Decimal))
@@ -544,17 +828,20 @@ fun SettingsDialog(store: Store, onClose: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton({
-                store.model = model
-                store.price = price.toFloatOrNull() ?: 0f
-                store.currency = cur
-                store.lowSoc = low.toIntOrNull() ?: 20
-                store.critSoc = crit.toIntOrNull() ?: 10
-                store.fullSoc = full.toIntOrNull() ?: 100
-                store.highTemp = temp.toIntOrNull() ?: 45
-                store.overloadW = over.toIntOrNull() ?: 700
-                onClose()
-            }) { Text("Save") }
+            Button(
+                {
+                    store.model = model
+                    store.price = price.toFloatOrNull() ?: 0f
+                    store.currency = cur
+                    store.lowSoc = low.toIntOrNull() ?: 20
+                    store.critSoc = crit.toIntOrNull() ?: 10
+                    store.fullSoc = full.toIntOrNull() ?: 100
+                    store.highTemp = temp.toIntOrNull() ?: 45
+                    store.overloadW = over.toIntOrNull() ?: 700
+                    onClose()
+                },
+                shape = RoundedCornerShape(10.dp)
+            ) { Text("Save Settings") }
         },
         dismissButton = { TextButton(onClose) { Text("Cancel") } },
     )
