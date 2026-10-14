@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -203,13 +202,13 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
 fun MainScreen(store: Store, onLogout: () -> Unit) {
     val ui by Repo.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
-    var showSettings by remember { mutableStateOf(value = false) }
     val ctx = LocalContext.current
     val tabs = listOf(
         "Home" to "⚡",
         "Solar & AC" to "☀",
         "History" to "📈",
-        "Raw" to "📋"
+        "Raw" to "📋",
+        "Settings" to "⚙"
     )
 
     Scaffold(
@@ -265,15 +264,6 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Surface(
-                        onClick = { showSettings = true },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) { Text("⚙", fontSize = 18.sp) }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
                         onClick = {
                             ctx.stopService(Intent(ctx, MonitorService::class.java))
                             store.password = ""
@@ -313,11 +303,11 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                 0 -> Dashboard(ui, store)
                 1 -> SolarAc(ui, store)
                 2 -> HistoryScreen(ui)
-                else -> RawScreen(ui)
+                3 -> RawScreen(ui)
+                else -> SettingsScreen(store)
             }
         }
     }
-    if (showSettings) SettingsDialog(store) { showSettings = false }
 }
 
 @Composable
@@ -776,7 +766,7 @@ fun RawScreen(ui: UiState) {
 
 // ===================================================================== settings
 @Composable
-fun SettingsDialog(store: Store, onClose: () -> Unit) {
+fun SettingsScreen(store: Store) {
     var model by remember { mutableStateOf(store.model) }
     var price by remember { mutableStateOf(store.price.toString()) }
     var cur by remember { mutableStateOf(store.currency) }
@@ -786,6 +776,7 @@ fun SettingsDialog(store: Store, onClose: () -> Unit) {
     var temp by remember { mutableStateOf(store.highTemp.toString()) }
     var over by remember { mutableStateOf(store.overloadW.toString()) }
     val num = KeyboardOptions(keyboardType = KeyboardType.Number)
+    var savedMessage by remember { mutableStateOf(false) }
 
     @Composable
     fun field(label: String, v: String, set: (String) -> Unit, kb: KeyboardOptions = num) =
@@ -794,45 +785,54 @@ fun SettingsDialog(store: Store, onClose: () -> Unit) {
             shape = RoundedCornerShape(12.dp), keyboardOptions = kb, modifier = Modifier.fillMaxWidth()
         )
 
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("App & Device Settings", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MODELS.keys.forEach { m ->
-                        FilterChip(
-                            selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                    }
-                }
-                field("Electricity price per kWh", price, { price = it }, KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                field("Currency symbol", cur, { cur = it }, KeyboardOptions.Default)
-                field("Low battery alert %", low, { low = it })
-                field("Critical alert %", crit, { crit = it })
-                field("Fully charged at %", full, { full = it })
-                field("High temperature °C", temp, { temp = it })
-                field("Overload alert (W)", over, { over = it })
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("App & Device Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text("Configure device model, currency, electricity pricing, and alert thresholds.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+
+        Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MODELS.keys.forEach { m ->
+                FilterChip(
+                    selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
+                    shape = RoundedCornerShape(16.dp)
+                )
             }
-        },
-        confirmButton = {
-            Button(
-                {
-                    store.model = model
-                    store.price = price.toFloatOrNull() ?: 0f
-                    store.currency = cur
-                    store.lowSoc = low.toIntOrNull() ?: 20
-                    store.critSoc = crit.toIntOrNull() ?: 10
-                    store.fullSoc = full.toIntOrNull() ?: 100
-                    store.highTemp = temp.toIntOrNull() ?: 45
-                    store.overloadW = over.toIntOrNull() ?: 700
-                    onClose()
-                },
-                shape = RoundedCornerShape(10.dp)
-            ) { Text("Save Settings") }
-        },
-        dismissButton = { TextButton(onClose) { Text("Cancel") } },
-    )
+        }
+        field("Electricity price per kWh", price, { price = it }, KeyboardOptions(keyboardType = KeyboardType.Decimal))
+        field("Currency symbol", cur, { cur = it }, KeyboardOptions.Default)
+        field("Low battery alert %", low, { low = it })
+        field("Critical alert %", crit, { crit = it })
+        field("Fully charged at %", full, { full = it })
+        field("High temperature °C", temp, { temp = it })
+        field("Overload alert (W)", over, { over = it })
+
+        Button(
+            onClick = {
+                store.model = model
+                store.price = price.toFloatOrNull() ?: 0f
+                store.currency = cur
+                store.lowSoc = low.toIntOrNull() ?: 20
+                store.critSoc = crit.toIntOrNull() ?: 10
+                store.fullSoc = full.toIntOrNull() ?: 100
+                store.highTemp = temp.toIntOrNull() ?: 45
+                store.overloadW = over.toIntOrNull() ?: 700
+                savedMessage = true
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text("Save Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+        if (savedMessage) {
+            Text("Settings saved successfully!", color = EMERALD, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(32.dp))
+    }
 }
