@@ -38,11 +38,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,7 +46,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,7 +113,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text("⚡", fontSize = 28.sp)
             }
@@ -140,7 +135,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                         email, { email = it }, label = { Text("EcoFlow email") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     )
                     OutlinedTextField(
                         pw, { pw = it }, label = { Text("EcoFlow password") },
@@ -210,7 +205,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
 fun MainScreen(store: Store, onLogout: () -> Unit) {
     val ui by Repo.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
-    var showSettings by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(value = false) }
     val ctx = LocalContext.current
     val tabs = listOf(
         "Home" to "⚡",
@@ -386,9 +381,7 @@ fun Gauge(s: Summary?) {
             // Background track arc
             drawArc(trackColor, 135f, 270f, false, style = st)
             // Active gauge arc
-            if (soc != null) {
-                drawArc(activeColor, 135f, 270f * (soc.toFloat() / 100f), false, style = st)
-            }
+            if (soc != null) drawArc(activeColor, 135f, 270f * (soc.toFloat() / 100f), false, style = st)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(fmt(soc, "%"), fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
@@ -411,7 +404,7 @@ fun Gauge(s: Summary?) {
             }
 
             // Power Flow Net Status
-            if (s != null && kotlin.math.abs(net) >= 3) {
+            if (s != null && (kotlin.math.abs(net) >= 3)) {
                 Spacer(Modifier.height(6.dp))
                 val isCharging = net > 0
                 Text(
@@ -427,8 +420,7 @@ fun Gauge(s: Summary?) {
 
 @Composable
 fun Dashboard(ui: UiState, store: Store) {
-    val s = ui.summary
-    val e = ui.energy
+    val (s, e) = ui.summary to ui.energy
     val price = store.price.toDouble()
     val cur = store.currency
     fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000) * price) else "set price in ⚙"
@@ -635,7 +627,7 @@ fun SolarAc(ui: UiState, store: Store) {
                 Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 RowKV("Date (solar / AC / in / out)", "")
-                e.days.keys.sortedDescending().take(30).forEach { d ->
+                e.days.keys.asSequence().sortedDescending().take(30).forEach { d ->
                     val r = e.days.getValue(d)
                     RowKV(d, "${fmtWh(r[0])} / ${fmtWh(r[1])} / ${fmtWh(r[2])} / ${fmtWh(r[3])}")
                 }
