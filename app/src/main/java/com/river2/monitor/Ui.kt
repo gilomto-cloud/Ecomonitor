@@ -222,7 +222,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("River 2", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                                Text("EcoMonitor", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                                 // Live Connection Dot Pill
                                 Surface(
                                     shape = CircleShape,
