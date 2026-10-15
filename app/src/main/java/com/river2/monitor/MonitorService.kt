@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -60,8 +61,12 @@ class MonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, fl: Int, startId: Int): Int {
-        ServiceCompat.startForeground(
-            this, 1, notif("Connecting…"), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(this, 1, notif("Connecting…"), fgsType)
         Repo.sender = { body -> send(body) }
         connect()
         return START_STICKY

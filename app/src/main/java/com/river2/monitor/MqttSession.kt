@@ -83,12 +83,12 @@ class MqttSession(
     }
 
     private fun handle(topicName: String?, text: String) {
-        val m = try { JSONObject(text) } catch (e: Exception) { return }
+        val m = try { JSONObject(text) } catch (_: Exception) { return }
 
-        if (topicName != null && (topicName.endsWith("/set_reply") || topicName.contains("/thing/property/"))) {
-            val code = if (m.has("code")) m.opt("code").toString() else ""
+        if ((topicName != null) && (topicName.endsWith("/set_reply") || topicName.contains("/thing/property/"))) {
+            val code = m.optString("code", "")
             val msg = m.optString("message", "")
-            if (code == "0" || code == "200") {
+            if ((code == "0") || (code == "200")) {
                 onLog("Set reply: SUCCESS ($msg)")
                 Repo.state.update { it.copy(cmdResult = "✓ Command confirmed by device") }
             } else if (code.isNotEmpty()) {
@@ -98,8 +98,8 @@ class MqttSession(
         }
 
         val flat = HashMap<String, Any?>()
-        val code = if (m.has("code")) m.opt("code").toString() else null
-        if (code != null && code != "0" && code != "200" && !m.has("params") && !m.has("data")) {
+        val code = if (m.has("code")) m.opt("code")?.toString() else null
+        if ((code != null) && (code != "0") && (code != "200") && !m.has("params") && !m.has("data")) {
             onStatus("Cloud reply: code $code ${m.optString("message")}", true)
             return
         }

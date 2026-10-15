@@ -44,8 +44,7 @@ fun toD(v: Any?): Double? = when (v) {
 
 fun pick(d: Map<String, Any?>, name: String): Double? {
     for (k in KEYS.getValue(name)) {
-        val v = toD(d[k])
-        if (v != null) return v
+        toD(d[k])?.let { return it }
     }
     return null
 }
@@ -56,10 +55,10 @@ fun flattenJson(prefix: String, o: Any?, out: MutableMap<String, Any?>) {
             val it = o.keys()
             while (it.hasNext()) {
                 val k = it.next()
-                flattenJson(if (prefix.isEmpty()) k else "$prefix.$k", o.get(k), out)
+                flattenJson(if (prefix.isEmpty()) k else "$prefix.$k", o.opt(k), out)
             }
         }
-        is JSONArray -> for (i in 0 until o.length()) flattenJson("$prefix[$i]", o.get(i), out)
+        is JSONArray -> for (i in 0 until o.length()) flattenJson("$prefix[$i]", o.opt(i), out)
         else -> if (prefix.isNotEmpty()) out[prefix] = o
     }
 }
@@ -74,7 +73,7 @@ data class Summary(
     val capWh: Double,
 ) {
     val net: Double get() = inW - outW
-    val storedWh: Double get() = capWh * (soc ?: 0.0) / 100.0
+    val storedWh: Double get() = (capWh * (soc ?: 0.0)) / 100.0
 
     /** (label, minutes). Prefers device value, otherwise computes from capacity. */
     fun eta(): Pair<String, Double?> {
@@ -82,11 +81,11 @@ data class Summary(
         if (abs(net) < 3) return "Idle" to null
         if (net > 0) {
             var m: Double? = chgMin
-            if (m == null || m <= 0 || m >= 5999) m = max(0.0, ((maxSoc ?: 100.0) - s) / 100 * capWh) / net * 60
+            if ((m == null) || (m <= 0) || (m >= 5999)) m = (max(0.0, (((maxSoc ?: 100.0) - s) / 100.0) * capWh) / net) * 60.0
             return "to full" to m
         }
         var m: Double? = dsgMin
-        if (m == null || m <= 0 || m >= 5999) m = max(0.0, (s - (minSoc ?: 0.0)) / 100 * capWh) / (-net) * 60
+        if ((m == null) || (m <= 0) || (m >= 5999)) m = (max(0.0, (((s - (minSoc ?: 0.0)) / 100.0) * capWh)) / (-net)) * 60.0
         return "remaining" to m
     }
 }
@@ -130,7 +129,7 @@ fun fmtWh(x: Double): String =
 
 fun fmtHms(sec: Double): String {
     val s = sec.toInt()
-    return "${s / 3600}h ${String.format(Locale.US, "%02d", s % 3600 / 60)}m"
+    return "${s / 3600}h ${String.format(Locale.US, "%02d", (s % 3600) / 60)}m"
 }
 
 data class Sample(val t: Long, val soc: Double?, val inW: Double?, val outW: Double?, val solar: Double?, val acIn: Double?)

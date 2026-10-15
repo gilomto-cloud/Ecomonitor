@@ -138,12 +138,12 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                         pw, { pw = it }, label = { Text("EcoFlow password") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        visualTransformation = PasswordVisualTransformation()
+                        visualTransformation = PasswordVisualTransformation(),
                     )
                     OutlinedTextField(
                         sn, { sn = it.trim() }, label = { Text("Device Serial Number (SN)") },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     )
 
                     Text("Region", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -155,7 +155,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
+                                ),
                             )
                         }
                     }
@@ -169,7 +169,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
+                                ),
                             )
                         }
                     }
@@ -188,7 +188,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EMERALD, contentColor = Color.Black)
+                colors = ButtonDefaults.buttonColors(containerColor = EMERALD, contentColor = Color.Black),
             ) {
                 Text("Connect Power Station", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
@@ -208,7 +208,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
         "Solar & AC" to "☀",
         "History" to "📈",
         "Raw" to "📋",
-        "Settings" to "⚙"
+        "Settings" to "⚙",
     )
 
     Scaffold(
@@ -232,19 +232,19 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                                     Row(
                                         Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
                                         Box(
                                             Modifier
                                                 .size(7.dp)
                                                 .clip(CircleShape)
-                                                .background(if (ui.connected) EMERALD else CRIMSON)
+                                                .background(if (ui.connected) EMERALD else CRIMSON),
                                         )
                                         Text(
                                             if (ui.connected) "LIVE" else "OFFLINE",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (ui.connected) EMERALD else CRIMSON
+                                            color = if (ui.connected) EMERALD else CRIMSON,
                                         )
                                     }
                                 }
@@ -258,7 +258,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                         onClick = { MonitorService.start(ctx) },
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(36.dp),
                     ) {
                         Box(contentAlignment = Alignment.Center) { Text("⟳", fontSize = 18.sp) }
                     }
@@ -367,9 +367,9 @@ fun Gauge(s: Summary?) {
             val strokeWidth = 26f
             val st = Stroke(width = strokeWidth, cap = StrokeCap.Round)
             // Background track arc
-            drawArc(trackColor, 135f, 270f, false, style = st)
+            drawArc(trackColor, 135f, 270f, useCenter = false, style = st)
             // Active gauge arc
-            if (soc != null) drawArc(activeColor, 135f, 270f * (soc.toFloat() / 100f), false, style = st)
+            soc?.let { drawArc(activeColor, 135f, 270f * (it.toFloat() / 100f), useCenter = false, style = st) }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(fmt(soc, "%"), fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
@@ -392,7 +392,7 @@ fun Gauge(s: Summary?) {
             }
 
             // Power Flow Net Status
-            if (s != null && (kotlin.math.abs(net) >= 3)) {
+            if ((s != null) && (kotlin.math.abs(net) >= 3)) {
                 Spacer(Modifier.height(6.dp))
                 val isCharging = net > 0
                 Text(
@@ -532,7 +532,7 @@ fun SolarAc(ui: UiState, store: Store) {
     val e = ui.energy
     val price = store.price.toDouble()
     val cur = store.currency
-    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, wh / 1000 * price) else "set price in ⚙"
+    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000.0) * price) else "set price in ⚙"
     val tot = e.todaySolar + e.todayAc
     val solarPct = if (tot > 0) (e.todaySolar / tot).toFloat() else 0f
 
@@ -657,11 +657,12 @@ fun HistoryScreen(ui: UiState) {
         }
 
         val now = System.currentTimeMillis()
-        val t0 = now - hours * 3_600_000L
+        val t0 = now - (hours * 3_600_000L)
         val pts = ui.history.filter { it.t >= t0 }
-        val wMax = if (pts.isEmpty()) 100.0 else max(100.0, pts.maxOf {
-            maxOf(it.inW ?: 0.0, it.outW ?: 0.0, it.solar ?: 0.0, it.acIn ?: 0.0)
-        })
+        val wMax = if (pts.isEmpty()) 100.0 else max(
+            100.0,
+            pts.maxOf { maxOf(it.inW ?: 0.0, it.outW ?: 0.0, it.solar ?: 0.0, it.acIn ?: 0.0) }
+        )
 
         Card(
             Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
@@ -671,7 +672,7 @@ fun HistoryScreen(ui: UiState) {
         ) {
             Canvas(Modifier.fillMaxSize().padding(16.dp)) {
                 for (i in 0..4) {
-                    val y = size.height * i / 4
+                    val y = (size.height * i) / 4f
                     drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
                 }
                 if (pts.size < 2) return@Canvas
@@ -737,9 +738,9 @@ fun RawScreen(ui: UiState) {
             return
         }
 
-        val rows = ui.raw.entries.sortedBy { it.key }.filter {
-            q.isBlank() || it.key.contains(q, true) || it.value.toString().contains(q, true)
-        }
+        val rows = ui.raw.entries.asSequence().sortedBy { it.key }.filter {
+            q.isBlank() || it.key.contains(q, ignoreCase = true) || it.value.toString().contains(q, ignoreCase = true)
+        }.toList()
 
         OutlinedTextField(
             q, { q = it }, label = { Text("Filter MQTT parameters") }, singleLine = true,
@@ -776,7 +777,7 @@ fun SettingsScreen(store: Store) {
     var temp by remember { mutableStateOf(store.highTemp.toString()) }
     var over by remember { mutableStateOf(store.overloadW.toString()) }
     val num = KeyboardOptions(keyboardType = KeyboardType.Number)
-    var savedMessage by remember { mutableStateOf(false) }
+    var savedMessage by remember { mutableStateOf(value = false) }
 
     @Composable
     fun field(label: String, v: String, set: (String) -> Unit, kb: KeyboardOptions = num) =

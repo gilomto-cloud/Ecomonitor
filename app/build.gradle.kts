@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.river2.monitor"
         minSdk = 26
-        targetSdk = 37
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
     }
@@ -19,6 +19,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
 }
 
 kotlin {
