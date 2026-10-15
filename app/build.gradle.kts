@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+base {
+    archivesName.set("EcoMonitor")
+}
+
 android {
     namespace = "com.river2.monitor"
     compileSdk = 37

@@ -23,5 +23,5 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: River2Monitor-debug-apk
+          name: EcoMonitor-debug-apk
           path: app/build/outputs/apk/debug/*.apk
