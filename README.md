@@ -1,4 +1,4 @@
-# River 2 Monitor (Android)
+# EcoMonitor (Android)
 
 Monitor your EcoFlow River 2 / 2 Max / 2 Pro from your phone: battery gauge, live power,
 solar production and AC usage tracking (with cost), history chart, and alerts.
