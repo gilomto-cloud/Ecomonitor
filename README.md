@@ -6,12 +6,6 @@ solar production and AC usage tracking (with cost), history chart, and alerts.
 It signs in with your EcoFlow **app** account and uses EcoFlow's cloud MQTT (the same
 route as the phone app). This is unofficial and EcoFlow may change it.
 
-## Build
-1. Install Android Studio (Koala or newer) with JDK 17.
-2. File > Open > select this folder, let Gradle sync (it downloads dependencies).
-3. Plug in your phone (USB debugging on) and press Run, or Build > Build APK(s).
-   The APK is in app/build/outputs/apk/debug/.
-
 ## First run
 Enter your EcoFlow email, password, device serial number (starts with R6...), pick the region
 that matches your EcoFlow account, and the model. Allow notifications when asked.
