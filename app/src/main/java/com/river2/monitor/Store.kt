@@ -57,6 +57,9 @@ class Store(ctx: Context) {
     var overloadW: Int
         get() = i("overload", 700)
         set(v) { sp.edit().putInt("overload", v).apply() }
+    var githubRepo: String
+        get() = s("githubRepo", "gilomto-cloud/Ecomonitor")
+        set(v) { sp.edit().putString("githubRepo", v).apply() }
 
     fun loadEnergy(): Energy {
         val today = LocalDate.now().toString()

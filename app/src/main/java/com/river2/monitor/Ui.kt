@@ -1,6 +1,7 @@
 package com.river2.monitor
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -26,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,12 +45,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -203,6 +208,11 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     val ui by Repo.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     val ctx = LocalContext.current
+    val updateManager = remember(store.githubRepo) { UpdateManager(ctx, store.githubRepo) }
+    LaunchedEffect(store.githubRepo) {
+        updateManager.checkForUpdates()
+    }
+
     val tabs = listOf(
         "Home" to "⚡",
         "Solar & AC" to "☀",
@@ -300,11 +310,11 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             when (tab) {
-                0 -> Dashboard(ui, store)
+                0 -> Dashboard(ui, store, updateManager) { tab = 4 }
                 1 -> SolarAc(ui, store)
                 2 -> HistoryScreen(ui)
                 3 -> RawScreen(ui)
-                else -> SettingsScreen(store)
+                else -> SettingsScreen(store, updateManager)
             }
         }
     }
@@ -407,7 +417,12 @@ fun Gauge(s: Summary?) {
 }
 
 @Composable
-fun Dashboard(ui: UiState, store: Store) {
+fun Dashboard(
+    ui: UiState,
+    store: Store,
+    updateManager: UpdateManager,
+    onNavigateToSettings: () -> Unit
+) {
     val (s, e) = ui.summary to ui.energy
     val price = store.price.toDouble()
     val cur = store.currency
@@ -416,6 +431,8 @@ fun Dashboard(ui: UiState, store: Store) {
     val savedTodayStr = if (price > 0) "${money(e.todaySolar)} (${fmtWh(e.todaySolar)})" else money(e.todaySolar)
     val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else money(e.totalSolar)
 
+    val updateStatus by updateManager.status.collectAsState()
+
     Column(
         Modifier
             .fillMaxSize()
@@ -423,6 +440,28 @@ fun Dashboard(ui: UiState, store: Store) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        if (updateStatus is UpdateStatus.Available && (updateStatus as UpdateStatus.Available).isNewer) {
+            val rel = (updateStatus as UpdateStatus.Available).release
+            Card(
+                onClick = onNavigateToSettings,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("🚀", fontSize = 22.sp)
+                    Column(Modifier.weight(1f)) {
+                        Text("New Version Available: ${rel.tagName}", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                        Text("Tap to review and install update", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Text("➜", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         // Hero Battery Gauge Card
         Card(
             Modifier.fillMaxWidth(),
@@ -767,7 +806,7 @@ fun RawScreen(ui: UiState) {
 
 // ===================================================================== settings
 @Composable
-fun SettingsScreen(store: Store) {
+fun SettingsScreen(store: Store, updateManager: UpdateManager) {
     var model by remember { mutableStateOf(store.model) }
     var price by remember { mutableStateOf(store.price.toString()) }
     var cur by remember { mutableStateOf(store.currency) }
@@ -834,6 +873,290 @@ fun SettingsScreen(store: Store) {
         if (savedMessage) {
             Text("Settings saved successfully!", color = EMERALD, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
+
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(8.dp))
+
+        UpdateCard(updateManager = updateManager, store = store)
+
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+fun UpdateCard(
+    updateManager: UpdateManager,
+    store: Store,
+    modifier: Modifier = Modifier
+) {
+    val ctx = LocalContext.current
+    val status by updateManager.status.collectAsState()
+    val scope = rememberCoroutineScope()
+    var repoText by remember { mutableStateOf(store.githubRepo) }
+    val currentVersion = remember { updateManager.getCurrentVersionName() }
+
+    fun performCheck() {
+        scope.launch {
+            val rel = updateManager.checkForUpdates()
+            if (rel != null) {
+                val isNewer = UpdateManager.isVersionNewer(rel.versionName, currentVersion)
+                if (isNewer) {
+                    Toast.makeText(ctx, "New version ${rel.tagName} available!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(ctx, "You are on the latest version (v$currentVersion).", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                val currentStatus = updateManager.status.value
+                val errMsg = if (currentStatus is UpdateStatus.Error) currentStatus.message else "Update check failed"
+                Toast.makeText(ctx, errMsg, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("🚀", fontSize = 20.sp)
+                    Column {
+                        Text("App Updates", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("Current Version: v$currentVersion", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Text(
+                        "GitHub Releases",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = repoText,
+                onValueChange = {
+                    repoText = it.trim()
+                    store.githubRepo = repoText
+                },
+                label = { Text("GitHub Repository (owner/repo)") },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Prominent "Check for Updates" Button
+            Button(
+                onClick = { performCheck() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = status !is UpdateStatus.Checking && status !is UpdateStatus.Downloading
+            ) {
+                if (status is UpdateStatus.Checking) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Text("Checking for Updates...", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Text("Check for Updates", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+            }
+
+            // Results / Notification Display
+            when (val s = status) {
+                is UpdateStatus.Idle -> {
+                    Text(
+                        "Tap \"Check for Updates\" to check for new releases.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                is UpdateStatus.Checking -> {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(CircleShape))
+                }
+                is UpdateStatus.Available -> {
+                    val release = s.release
+                    val sizeMb = String.format(Locale.US, "%.1f MB", release.apkSize / (1024.0 * 1024.0))
+
+                    if (s.isNewer) {
+                        Surface(
+                            color = EMERALD.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, EMERALD.copy(alpha = 0.4f))
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("🎉", fontSize = 18.sp)
+                                    Text(
+                                        "New Version Available: ${release.tagName}",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = EMERALD,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                                Text(
+                                    "Current version: v$currentVersion • Latest release: ${release.tagName} ($sizeMb)",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (release.releaseNotes.isNotBlank()) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        release.releaseNotes,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 6
+                                    )
+                                }
+                                Button(
+                                    onClick = { scope.launch { updateManager.downloadApk(release) } },
+                                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = EMERALD, contentColor = Color.Black)
+                                ) {
+                                    Text("Download & Install Update", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, EMERALD.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text("✅", fontSize = 22.sp)
+                                Column {
+                                    Text(
+                                        "You are on the current latest version!",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = EMERALD
+                                    )
+                                    Text(
+                                        "Installed version: v$currentVersion (${release.tagName})",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                is UpdateStatus.Downloading -> {
+                    val downloadedMb = String.format(Locale.US, "%.1f", s.downloadedBytes / (1024.0 * 1024.0))
+                    val totalMb = String.format(Locale.US, "%.1f", s.totalBytes / (1024.0 * 1024.0))
+                    val pct = (s.progress * 100).toInt()
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Downloading update...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("$pct% ($downloadedMb / $totalMb MB)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        LinearProgressIndicator(
+                            progress = { s.progress },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                            color = CYAN
+                        )
+                    }
+                }
+                is UpdateStatus.ReadyToInstall -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            color = EMERALD.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, EMERALD.copy(alpha = 0.4f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("📦", fontSize = 20.sp)
+                                Column {
+                                    Text("Download Complete!", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EMERALD)
+                                    Text("Ready to install ${s.release.tagName}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        if (!updateManager.canInstallApks()) {
+                            Button(
+                                onClick = { updateManager.openInstallPermissionSettings() },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AMBER, contentColor = Color.Black)
+                            ) {
+                                Text("Grant Permission to Install APKs", fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Button(
+                                onClick = { updateManager.installApk(s.file) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = EMERALD, contentColor = Color.Black)
+                            ) {
+                                Text("Install Now", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+                is UpdateStatus.Error -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            color = CRIMSON.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, CRIMSON.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                s.message,
+                                color = CRIMSON,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
