@@ -39,7 +39,7 @@ sealed class UpdateStatus {
 
 class UpdateManager(
     private val context: Context,
-    private val repo: String = "gilomto-cloud/Ecomonitor"
+    private val repo: String = "gilomto-cloud/Ecomonitor",
 ) {
 
     private val http = OkHttpClient.Builder()
@@ -120,7 +120,7 @@ class UpdateManager(
                 apkUrl = apkUrl,
                 apkName = apkName,
                 apkSize = apkSize,
-                htmlUrl = htmlUrl
+                htmlUrl = htmlUrl,
             )
 
             val currentVer = getCurrentVersionName()
@@ -210,17 +210,13 @@ class UpdateManager(
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
             _status.value = UpdateStatus.Error("Failed to trigger installation: ${e.localizedMessage ?: e.message}")
         }
-    }
-
-    fun resetStatus() {
-        _status.value = UpdateStatus.Idle
     }
 
     companion object {
@@ -239,7 +235,7 @@ class UpdateManager(
         }
 
         private fun parseVersionParts(versionStr: String): List<Int> {
-            val clean = versionStr.trim().takeWhile { it.isDigit() || it == '.' }
+            val clean = versionStr.trim().takeWhile { (it.isDigit() || (it == '.')) }
             return clean.split('.').mapNotNull { it.toIntOrNull() }
         }
     }
