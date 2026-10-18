@@ -1,6 +1,10 @@
 # Paho MQTT
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 -keep class org.eclipse.paho.client.mqttv3.** { *; }
--keep interface org.eclipse.paho.client.mqttv3.** { *; }
+-keep class org.eclipse.paho.client.mqttv3.logging.** { *; }
+-keep class org.eclipse.paho.client.mqttv3.logging.JSR47Logger { <init>(); *; }
+-keep class org.eclipse.paho.client.mqttv3.logging.LoggerFactory { *; }
+-keep interface org.eclipse.paho.client.mqttv3.logging.Logger { *; }
 -dontwarn org.eclipse.paho.client.mqttv3.**
 
 # OkHttp

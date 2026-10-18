@@ -88,10 +88,20 @@ fun App(store: Store) {
     else MainScreen(store) { configured = false }
 }
 
+fun getAppVersion(context: android.content.Context): String {
+    return try {
+        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        pInfo.versionName ?: "1.0.0"
+    } catch (_: Exception) {
+        "1.0.0"
+    }
+}
+
 // ===================================================================== login
 @Composable
 fun LoginScreen(store: Store, onDone: () -> Unit) {
     val ctx = LocalContext.current
+    val appVersion = remember { getAppVersion(ctx) }
     var email by remember { mutableStateOf(store.email) }
     var pw by remember { mutableStateOf(store.password) }
     var sn by remember { mutableStateOf(store.sn) }
@@ -194,6 +204,14 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
             ) {
                 Text("Connect Power Station", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "EcoMonitor v$appVersion",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
     }
 }
@@ -777,6 +795,8 @@ fun RawScreen(ui: UiState) {
 // ===================================================================== settings
 @Composable
 fun SettingsScreen(store: Store) {
+    val ctx = LocalContext.current
+    val appVersion = remember { getAppVersion(ctx) }
     var model by remember { mutableStateOf(store.model) }
     var price by remember { mutableStateOf(store.price.toString()) }
     var cur by remember { mutableStateOf(store.currency) }
@@ -802,7 +822,25 @@ fun SettingsScreen(store: Store) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("App & Device Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("App & Device Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Text(
+                    "v$appVersion",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
         Text("Configure device model, currency, electricity pricing, and alert thresholds.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
 
@@ -843,6 +881,16 @@ fun SettingsScreen(store: Store) {
         if (savedMessage) {
             Text("Settings saved successfully!", color = EMERALD, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "EcoMonitor v$appVersion",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
 
         Spacer(Modifier.height(32.dp))
     }
