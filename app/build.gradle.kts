@@ -7,8 +7,8 @@ base {
     archivesName.set("EcoMonitor")
 }
 
-val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.2.0"
+val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 10203
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.2.3"
 
 android {
     namespace = "com.river2.monitor"

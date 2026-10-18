@@ -1,10 +1,6 @@
 # Paho MQTT
--keep class org.eclipse.paho.client.mqttv3.MqttAsyncClient { *; }
--keep class org.eclipse.paho.client.mqttv3.MqttCallbackExtended { *; }
--keep class org.eclipse.paho.client.mqttv3.MqttConnectOptions { *; }
--keep class org.eclipse.paho.client.mqttv3.MqttMessage { *; }
--keep class org.eclipse.paho.client.mqttv3.IMqttDeliveryToken { *; }
--keep class org.eclipse.paho.client.mqttv3.persist.MemoryPersistence { *; }
+-keep class org.eclipse.paho.client.mqttv3.** { *; }
+-keep interface org.eclipse.paho.client.mqttv3.** { *; }
 -dontwarn org.eclipse.paho.client.mqttv3.**
 
 # OkHttp
