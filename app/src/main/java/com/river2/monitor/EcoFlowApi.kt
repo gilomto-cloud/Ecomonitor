@@ -31,7 +31,7 @@ object EcoFlowApi {
     }
 
     private fun call(req: Request): JSONObject {
-        val (code, text) = http.newCall(req).execute().use { r -> r.code to r.body?.string().orEmpty() }
+        val (code, text) = http.newCall(req).execute().use { r -> r.code to r.body.string().orEmpty() }
         val j = try { JSONObject(text) } catch (e: Exception) {
             throw IOException("HTTP $code: invalid response")
         }
