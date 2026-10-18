@@ -14,10 +14,19 @@ android {
     namespace = "com.river2.monitor"
     compileSdk = 37
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore.jks")
+            storePassword = "ecomonitor123"
+            keyAlias = "ecomonitor"
+            keyPassword = "ecomonitor123"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.river2.monitor"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
     }
@@ -28,13 +37,16 @@ android {
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
