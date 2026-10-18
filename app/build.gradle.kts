@@ -7,6 +7,9 @@ base {
     archivesName.set("EcoMonitor")
 }
 
+val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
+val appVersionName = System.getenv("VERSION_NAME") ?: "1.2.0"
+
 android {
     namespace = "com.river2.monitor"
     compileSdk = 37
@@ -15,8 +18,8 @@ android {
         applicationId = "com.river2.monitor"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
