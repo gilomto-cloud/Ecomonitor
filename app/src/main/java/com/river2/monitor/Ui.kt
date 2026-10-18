@@ -629,24 +629,6 @@ fun SolarAc(ui: UiState, store: Store) {
                 RowKV("AC Cost Total", money(e.totalAc))
             }
         }
-
-        // Daily Totals Card
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                RowKV("Date (solar / AC / in / out)", "")
-                e.days.keys.asSequence().sortedDescending().take(30).forEach { d ->
-                    val r = e.days.getValue(d)
-                    RowKV(d, "${fmtWh(r[0])} / ${fmtWh(r[1])} / ${fmtWh(r[2])} / ${fmtWh(r[3])}")
-                }
-            }
-        }
     }
 }
 
@@ -655,10 +637,16 @@ fun SolarAc(ui: UiState, store: Store) {
 fun HistoryScreen(ui: UiState) {
     var hours by remember { mutableIntStateOf(1) }
     val axisColor = MaterialTheme.colorScheme.outlineVariant
+    val e = ui.energy
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         Text("Power History", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1, 6, 24).forEach { h ->
@@ -673,7 +661,6 @@ fun HistoryScreen(ui: UiState) {
             }
         }
 
-        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("● Battery", color = EMERALD, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text("● In W", color = CYAN, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -691,7 +678,7 @@ fun HistoryScreen(ui: UiState) {
         )
 
         Card(
-            Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
+            Modifier.fillMaxWidth().height(260.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -720,11 +707,28 @@ fun HistoryScreen(ui: UiState) {
                 line(INDIGO, wMax) { it.acIn }
             }
         }
-        Spacer(Modifier.height(8.dp))
         Text(
             "Scale: Battery % (0–100%), Watts scaled to max value in view (${wMax.toInt()} W).",
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // Daily Energy History Card
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                RowKV("Date (solar / AC / in / out)", "")
+                e.days.keys.asSequence().sortedDescending().take(30).forEach { d ->
+                    val r = e.days.getValue(d)
+                    RowKV(d, "${fmtWh(r[0])} / ${fmtWh(r[1])} / ${fmtWh(r[2])} / ${fmtWh(r[3])}")
+                }
+            }
+        }
     }
 }
 
