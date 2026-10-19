@@ -67,6 +67,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 
@@ -636,6 +638,12 @@ fun SolarAc(ui: UiState, store: Store) {
 @Composable
 fun HistoryScreen(ui: UiState) {
     var hours by remember { mutableIntStateOf(1) }
+    var showSoc by remember { mutableStateOf(true) }
+    var showInW by remember { mutableStateOf(true) }
+    var showOutW by remember { mutableStateOf(true) }
+    var showSolar by remember { mutableStateOf(true) }
+    var showAcIn by remember { mutableStateOf(true) }
+
     val axisColor = MaterialTheme.colorScheme.outlineVariant
     val e = ui.energy
 
@@ -661,21 +669,78 @@ fun HistoryScreen(ui: UiState) {
             }
         }
 
+        Text("Metrics to display", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            FilterChip(
+                selected = showSoc, onClick = { showSoc = !showSoc },
+                label = { Text("Battery") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = EMERALD.copy(alpha = 0.2f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+            FilterChip(
+                selected = showInW, onClick = { showInW = !showInW },
+                label = { Text("In W") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = CYAN.copy(alpha = 0.2f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+            FilterChip(
+                selected = showOutW, onClick = { showOutW = !showOutW },
+                label = { Text("Out W") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = ORANGE.copy(alpha = 0.2f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+            FilterChip(
+                selected = showSolar, onClick = { showSolar = !showSolar },
+                label = { Text("Solar W") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = AMBER.copy(alpha = 0.2f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+            FilterChip(
+                selected = showAcIn, onClick = { showAcIn = !showAcIn },
+                label = { Text("AC W") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = INDIGO.copy(alpha = 0.2f),
+                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                )
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("● Battery", color = EMERALD, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("● In W", color = CYAN, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("● Out W", color = ORANGE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("● Solar W", color = AMBER, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("● AC W", color = INDIGO, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (showSoc) Text("● Battery", color = EMERALD, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (showInW) Text("● In W", color = CYAN, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (showOutW) Text("● Out W", color = ORANGE, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (showSolar) Text("● Solar W", color = AMBER, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (showAcIn) Text("● AC W", color = INDIGO, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
         val now = System.currentTimeMillis()
         val t0 = now - (hours * 3_600_000L)
         val pts = ui.history.filter { it.t >= t0 }
-        val wMax = if (pts.isEmpty()) 100.0 else max(
-            100.0,
-            pts.maxOf { maxOf(it.inW ?: 0.0, it.outW ?: 0.0, it.solar ?: 0.0, it.acIn ?: 0.0) }
-        )
+        val activeMaxValues = pts.map { p ->
+            listOfNotNull(
+                if (showInW) p.inW else null,
+                if (showOutW) p.outW else null,
+                if (showSolar) p.solar else null,
+                if (showAcIn) p.acIn else null,
+            ).maxOrNull() ?: 0.0
+        }
+        val wMax = max(100.0, activeMaxValues.maxOrNull() ?: 100.0)
 
         Card(
             Modifier.fillMaxWidth().height(260.dp),
@@ -687,6 +752,8 @@ fun HistoryScreen(ui: UiState) {
                 for (i in 0..4) {
                     val y = (size.height * i) / 4f
                     drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
+                    val x = (size.width * i) / 4f
+                    drawLine(axisColor, Offset(x, 0f), Offset(x, size.height), 0.5f)
                 }
                 if (pts.size < 2) return@Canvas
                 fun line(color: Color, top: Double, get: (Sample) -> Double?) {
@@ -700,13 +767,26 @@ fun HistoryScreen(ui: UiState) {
                     }
                     drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
                 }
-                line(EMERALD, 100.0) { it.soc }
-                line(CYAN, wMax) { it.inW }
-                line(ORANGE, wMax) { it.outW }
-                line(AMBER, wMax) { it.solar }
-                line(INDIGO, wMax) { it.acIn }
+                if (showSoc) line(EMERALD, 100.0) { it.soc }
+                if (showInW) line(CYAN, wMax) { it.inW }
+                if (showOutW) line(ORANGE, wMax) { it.outW }
+                if (showSolar) line(AMBER, wMax) { it.solar }
+                if (showAcIn) line(INDIGO, wMax) { it.acIn }
             }
         }
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val sdf = SimpleDateFormat(if (hours > 6) "MM-dd HH:mm" else "HH:mm", Locale.US)
+            Text(sdf.format(Date(t0)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sdf.format(Date(t0 + (now - t0) / 4)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sdf.format(Date(t0 + (now - t0) / 2)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sdf.format(Date(t0 + 3 * (now - t0) / 4)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sdf.format(Date(now)), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
         Text(
             "Scale: Battery % (0–100%), Watts scaled to max value in view (${wMax.toInt()} W).",
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
