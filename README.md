@@ -1,5 +1,11 @@
 # EcoMonitor (Android)
 
+<img width="180" height="374.375" alt="4087" src="https://github.com/user-attachments/assets/e9f1c5a3-24dd-461f-956d-d53ec7bce797" />
+<img width="180" height="374.375" alt="4086" src="https://github.com/user-attachments/assets/6567d9da-08bf-42ff-9d18-568101ef8c85" />
+<img width="180" height="374.375" alt="4085" src="https://github.com/user-attachments/assets/4bb07b44-5fed-4818-9cf6-1d34371e65fe" />
+<img width="180" height="374.375" alt="4084" src="https://github.com/user-attachments/assets/4688c99d-8cb6-4f0c-aae6-4c59e6516f3d" />
+<img width="180" height="374.375" alt="4082" src="https://github.com/user-attachments/assets/2bf3611d-d156-4891-874d-49b78520afb7" />
+
 Monitor your EcoFlow River 2 / 2 Max / 2 Pro from your phone: battery gauge, live power,
 solar production and AC usage tracking (with cost), history chart, and alerts.
 
