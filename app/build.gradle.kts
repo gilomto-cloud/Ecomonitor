@@ -132,10 +132,10 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-tasks.register("generateKeystore") {
+val generateKeystoreTask = tasks.register("generateKeystore") {
     group = "signing"
     description = "Generates release keystore app/keystore.jks if missing or empty"
-    val keystoreFile = layout.projectDirectory.file("app/keystore.jks")
+    val keystoreFile = layout.projectDirectory.file("keystore.jks")
     outputs.file(keystoreFile)
     doLast {
         val file = keystoreFile.asFile
@@ -171,4 +171,8 @@ tasks.register("generateKeystore") {
             println("Keystore already exists at ${file.absolutePath}")
         }
     }
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateKeystoreTask)
 }
