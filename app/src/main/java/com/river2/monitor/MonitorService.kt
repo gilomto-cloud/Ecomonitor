@@ -45,6 +45,8 @@ class MonitorService : Service() {
     private var started = false
 
     companion object {
+        private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss")
+
         fun start(ctx: Context) {
             ContextCompat.startForegroundService(ctx, Intent(ctx, MonitorService::class.java))
         }
@@ -125,7 +127,7 @@ class MonitorService : Service() {
     }
 
     private fun log(line: String) {
-        val t = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        val t = LocalTime.now().format(TIME_FORMATTER)
         val copy: List<String>
         synchronized(debugLog) {
             debugLog.addFirst("$t  $line")
@@ -179,7 +181,7 @@ class MonitorService : Service() {
             store.saveEnergy(energy)
             lastSave = now
         }
-        val t = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        val t = LocalTime.now().format(TIME_FORMATTER)
         val prev = Repo.state.value
         Repo.state.value = prev.copy(
             status = "● Connected — updated $t", connected = true, raw = raw, summary = s,

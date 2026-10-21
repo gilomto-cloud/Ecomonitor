@@ -917,6 +917,8 @@ fun HistoryScreen(ui: UiState, store: Store? = null) {
                 val chartBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
                 val gridColor = axisColor.copy(alpha = 0.35f)
                 val gridStrongColor = axisColor.copy(alpha = 0.7f)
+                val linePath = remember { Path() }
+                val fillPath = remember { Path() }
                 Canvas(Modifier.fillMaxSize()) {
                     drawRoundRect(chartBgColor, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f))
                     for (i in 0..4) {
@@ -928,8 +930,8 @@ fun HistoryScreen(ui: UiState, store: Store? = null) {
                     if (pts.size < 2) return@Canvas
                     val timeSpan = maxOf(1L, now - t0)
                     fun line(color: Color, top: Double, get: (Sample) -> Double?) {
-                        val linePath = Path()
-                        val fillPath = Path()
+                        linePath.reset()
+                        fillPath.reset()
                         var started = false
                         for (p in pts) {
                             val v = get(p) ?: continue

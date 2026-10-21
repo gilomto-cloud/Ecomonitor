@@ -27,13 +27,6 @@ class UpdateManager(
     private val repo: String = "gilomto-cloud/EcoMonitor",
 ) {
 
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .build()
-
     private fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -121,6 +114,13 @@ class UpdateManager(
     }
 
     companion object {
+        private val http = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+
         fun isVersionNewer(newVersion: String, currentVersion: String): Boolean {
             val newParts = parseVersionParts(newVersion)
             val currParts = parseVersionParts(currentVersion)
