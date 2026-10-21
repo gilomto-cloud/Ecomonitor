@@ -902,7 +902,10 @@ fun HistoryScreen(ui: UiState, store: Store? = null) {
                 ).maxOrNull() ?: 0.0
             }
         }
-        val wMax = max(100.0, activeMaxValues.maxOrNull() ?: 100.0)
+        val wMax = historyPowerScaleMax(
+            store?.model,
+            activeMaxValues
+        ).coerceAtLeast(1.0)
 
         Card(
             Modifier.fillMaxWidth().height(260.dp),
@@ -911,25 +914,45 @@ fun HistoryScreen(ui: UiState, store: Store? = null) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Box(Modifier.fillMaxSize().padding(16.dp)) {
+                val chartBgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                val gridColor = axisColor.copy(alpha = 0.35f)
+                val gridStrongColor = axisColor.copy(alpha = 0.7f)
                 Canvas(Modifier.fillMaxSize()) {
+                    drawRoundRect(chartBgColor, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f))
                     for (i in 0..4) {
                         val y = (size.height * i) / 4f
-                        drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
+                        drawLine(if (i == 0 || i == 4) gridStrongColor else gridColor, Offset(0f, y), Offset(size.width, y), 1f)
                         val x = (size.width * i) / 4f
-                        drawLine(axisColor, Offset(x, 0f), Offset(x, size.height), 0.5f)
+                        drawLine(gridColor.copy(alpha = 0.25f), Offset(x, 0f), Offset(x, size.height), 0.5f)
                     }
                     if (pts.size < 2) return@Canvas
                     val timeSpan = maxOf(1L, now - t0)
                     fun line(color: Color, top: Double, get: (Sample) -> Double?) {
-                        val path = Path()
+                        val linePath = Path()
+                        val fillPath = Path()
                         var started = false
                         for (p in pts) {
                             val v = get(p) ?: continue
                             val x = (((p.t - t0).toFloat() / timeSpan) * size.width).coerceIn(0f, size.width)
                             val y = size.height * (1f - (v.coerceIn(0.0, top) / top).toFloat())
-                            if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+                            if (!started) {
+                                linePath.moveTo(x, y)
+                                fillPath.moveTo(x, size.height)
+                                fillPath.lineTo(x, y)
+                                started = true
+                            } else {
+                                linePath.lineTo(x, y)
+                                fillPath.lineTo(x, y)
+                            }
                         }
-                        drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                        if (!started) return
+                        fillPath.lineTo(size.width, size.height)
+                        fillPath.close()
+                        drawPath(
+                            fillPath,
+                            Brush.verticalGradient(listOf(color.copy(alpha = 0.38f), color.copy(alpha = 0.04f))),
+                        )
+                        drawPath(linePath, color, style = Stroke(width = 3.5f, cap = StrokeCap.Round))
                     }
                     if (showSoc) line(EMERALD, 100.0) { it.soc }
                     if (showInW) line(CYAN, wMax) { it.inW }
@@ -943,11 +966,11 @@ fun HistoryScreen(ui: UiState, store: Store? = null) {
                     Modifier.fillMaxHeight(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("${wMax.toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                    Text("${wMax.toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), fontWeight = FontWeight.Bold)
                     Text("${(wMax * 0.75).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                     Text("${(wMax * 0.5).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                     Text("${(wMax * 0.25).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                    Text("0 W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("0 W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
                 }
 
                 // Battery % Scale Overlay on Right Side if Battery enabled
@@ -1667,4 +1690,15 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
         )
         Spacer(Modifier.height(32.dp))
     }
+}
+
+private fun modelPowerMax(model: String?): Double {
+    val normalizedModel = model?.trim()?.takeIf { it.isNotEmpty() } ?: "River 2"
+    return MODELS[normalizedModel] ?: MODELS.values.maxOrNull() ?: 256.0
+}
+
+private fun historyPowerScaleMax(model: String?, values: List<Double>): Double {
+    val modelMax = modelPowerMax(model)
+    val sampleMax = values.maxOrNull() ?: 0.0
+    return max(modelMax, sampleMax)
 }
