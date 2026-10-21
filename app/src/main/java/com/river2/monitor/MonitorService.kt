@@ -117,12 +117,13 @@ class MonitorService : Service() {
 
     private fun log(line: String) {
         val t = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        val copy: List<String>
         synchronized(debugLog) {
             debugLog.addFirst("$t  $line")
             while (debugLog.size > 80) debugLog.removeLast()
-            val copy = debugLog.toList()
-            Repo.state.update { it.copy(debug = copy) }
+            copy = debugLog.toList()
         }
+        Repo.state.update { it.copy(debug = copy) }
     }
 
     private fun status(msg: String, connected: Boolean) {

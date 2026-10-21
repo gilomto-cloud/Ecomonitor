@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +41,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -68,9 +72,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import kotlin.math.max
+import kotlin.time.Duration.Companion.milliseconds
 
 // Tech Giant Premium Color Palette
 private val EMERALD = Color(0xFF10B981)
@@ -229,13 +237,43 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
         um.checkForUpdates()
     }
 
-    val tabs = listOf(
-        "Home" to "⚡",
-        "Solar & AC" to "☀",
-        "History" to "📈",
-        "Raw" to "📋",
-        "Settings" to "⚙",
-    )
+    val showRaw = store.showRawTab
+    val tabs = remember(showRaw) {
+        buildList {
+            add("Home" to "⚡")
+            add("Solar & AC" to "☀")
+            add("History" to "📈")
+            if (showRaw) add("Raw" to "📋")
+            add("Settings" to "⚙")
+        }
+    }
+
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Sign Out", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to disconnect from your EcoFlow account and sign out?", fontSize = 14.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLogoutDialog = false
+                    ctx.stopService(Intent(ctx, MonitorService::class.java))
+                    store.password = ""
+                    onLogout()
+                }) {
+                    Text("Sign Out", color = CRIMSON, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -290,16 +328,13 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Surface(
-                        onClick = {
-                            ctx.stopService(Intent(ctx, MonitorService::class.java))
-                            store.password = ""
-                            onLogout()
-                        },
+                        onClick = { showLogoutDialog = true },
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = CRIMSON.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, CRIMSON.copy(alpha = 0.3f)),
                         modifier = Modifier.size(36.dp),
                     ) {
-                        Box(contentAlignment = Alignment.Center) { Text("⏻", fontSize = 16.sp, color = CRIMSON) }
+                        Box(contentAlignment = Alignment.Center) { Text("🚪", fontSize = 16.sp) }
                     }
                     Spacer(Modifier.width(12.dp))
                 },
@@ -325,12 +360,14 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
         },
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            when (tab) {
-                0 -> Dashboard(ui, store)
-                1 -> SolarAc(ui, store)
-                2 -> HistoryScreen(ui)
-                3 -> RawScreen(ui)
-                else -> SettingsScreen(store)
+            val currentTabName = tabs.getOrNull(tab)?.first ?: "Home"
+            when (currentTabName) {
+                "Home" -> Dashboard(ui, store)
+                "Solar & AC" -> SolarAc(ui, store)
+                "History" -> HistoryScreen(ui, store)
+                "Raw" -> RawScreen(ui)
+                "Settings" -> SettingsScreen(store, onLogout)
+                else -> Dashboard(ui, store)
             }
         }
     }
@@ -395,11 +432,30 @@ fun Gauge(s: Summary?) {
             // Background track arc
             drawArc(trackColor, 135f, 270f, useCenter = false, style = st)
             // Active gauge arc
-            soc?.let { drawArc(activeColor, 135f, 270f * (it.toFloat() / 100f), useCenter = false, style = st) }
+            soc?.let {
+                val safeSoc = it.toFloat().coerceIn(0f, 100f)
+                drawArc(activeColor, 135f, 270f * (safeSoc / 100f), useCenter = false, style = st)
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(fmt(soc, "%"), fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
-            Text("BATTERY LEVEL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (net > 2) {
+                    Text("⚡ ", fontSize = 28.sp, color = EMERALD)
+                }
+                Text(
+                    fmt(soc, "%"),
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Text(
+                "BATTERY LEVEL",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.sp
+            )
             Spacer(Modifier.height(8.dp))
 
             // Time Remaining Pill Badge
@@ -440,10 +496,10 @@ fun Dashboard(
     val (s, e) = ui.summary to ui.energy
     val price = store.price.toDouble()
     val cur = store.currency
-    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000) * price) else "set price in ⚙"
+    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000.0) * price) else ""
 
-    val savedTodayStr = if (price > 0) "${money(e.todaySolar)} (${fmtWh(e.todaySolar)})" else money(e.todaySolar)
-    val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else money(e.totalSolar)
+    val savedTodayStr = if (price > 0) "${money(e.todaySolar)} (${fmtWh(e.todaySolar)})" else fmtWh(e.todaySolar)
+    val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else fmtWh(e.totalSolar)
 
     Column(
         Modifier
@@ -459,7 +515,22 @@ fun Dashboard(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
-            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                // Connection & Model Status Chip
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (ui.connected) EMERALD.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(0.5.dp, if (ui.connected) EMERALD.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text(
+                        "${store.model} • ${if (ui.connected) "Connected" else "Disconnected"}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (ui.connected) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 Gauge(s)
             }
         }
@@ -497,6 +568,14 @@ fun Dashboard(
                             Text(totalSavedStr, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
+                    if (price <= 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "💡 Tip: Set electricity price per kWh in Settings ⚙ to estimate $ currency savings.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -507,9 +586,17 @@ fun Dashboard(
             MetricTile("TOTAL INPUT", fmt(s?.inW, " W"), Modifier.weight(1f), accentColor = CYAN)
             MetricTile("TOTAL OUTPUT", fmt(s?.outW, " W"), Modifier.weight(1f), accentColor = ORANGE)
         }
+
+        val netVal = s?.net ?: 0.0
+        val netColor = when {
+            netVal > 2 -> EMERALD
+            netVal < -2 -> ORANGE
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("NET POWER", if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net), Modifier.weight(1f))
-            MetricTile("STORED ENERGY", if (s == null) "—" else "${fmt(s.storedWh)} / ${fmt(s.capWh)} Wh", Modifier.weight(1f))
+            MetricTile("NET POWER", if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net), Modifier.weight(1f), accentColor = netColor)
+            MetricTile("STORED ENERGY", if (s == null) "—" else "${fmtWh(s.storedWh)} / ${fmtWh(s.capWh)}", Modifier.weight(1f))
         }
 
         // Section 2: Input & Output Breakdown
@@ -560,9 +647,12 @@ fun SolarAc(ui: UiState, store: Store) {
     val (s, e) = ui.summary to ui.energy
     val price = store.price.toDouble()
     val cur = store.currency
-    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000.0) * price) else "set price in ⚙"
+    fun money(wh: Double) = if (price > 0) String.format(Locale.US, "%s%.2f", cur, (wh / 1000.0) * price) else "Set price in ⚙"
     val tot = e.todaySolar + e.todayAc
     val solarPct = if (tot > 0) (e.todaySolar / tot).toFloat() else 0f
+
+    val isSolarActive = (s?.solar ?: 0.0) > 1.0
+    val isAcActive = (s?.acIn ?: 0.0) > 5.0
 
     Column(
         Modifier
@@ -571,6 +661,24 @@ fun SolarAc(ui: UiState, store: Store) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // Quick Live Input Comparison Header Tiles
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricTile(
+                label = "SOLAR INPUT",
+                value = fmt(s?.solar, " W"),
+                subValue = if (isSolarActive) "● Generating" else "Idle",
+                accentColor = AMBER,
+                modifier = Modifier.weight(1f)
+            )
+            MetricTile(
+                label = "AC GRID INPUT",
+                value = fmt(s?.acIn, " W"),
+                subValue = if (isAcActive) "● Active" else "Standby",
+                accentColor = INDIGO,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
         // Solar Panel Card
         Card(
             Modifier.fillMaxWidth(),
@@ -579,9 +687,28 @@ fun SolarAc(ui: UiState, store: Store) {
             border = BorderStroke(1.dp, AMBER.copy(alpha = 0.4f)),
         ) {
             Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("☀", fontSize = 20.sp)
-                    Text("Solar Panel", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AMBER)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("☀", fontSize = 20.sp)
+                        Text("Solar Panel", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AMBER)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSolarActive) EMERALD.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(0.5.dp, if (isSolarActive) EMERALD.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Text(
+                            if (isSolarActive) "● Generating" else "Idle",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSolarActive) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 RowKV("Producing Now", fmt(s?.solar, " W"))
@@ -593,10 +720,22 @@ fun SolarAc(ui: UiState, store: Store) {
                 RowKV("Total Solar Produced", fmtWh(e.totalSolar))
                 RowKV("Sun Hours Today", fmtHms(e.solarSecs))
                 RowKV("Solar Value Today", money(e.todaySolar))
+                RowKV("Total Solar Value Saved", money(e.totalSolar))
 
-                Spacer(Modifier.height(8.dp))
-                Text("Solar Share of Input Today", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Solar Share of Input Today", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${(solarPct * 100).toInt()}% Solar",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AMBER
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { solarPct },
                     modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
@@ -614,15 +753,34 @@ fun SolarAc(ui: UiState, store: Store) {
             border = BorderStroke(1.dp, INDIGO.copy(alpha = 0.4f)),
         ) {
             Column(Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🔌", fontSize = 20.sp)
-                    Text("AC Wall Charging", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = INDIGO)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("🔌", fontSize = 20.sp)
+                        Text("AC Wall Charging", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = INDIGO)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isAcActive) INDIGO.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(0.5.dp, if (isAcActive) INDIGO.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Text(
+                            if (isAcActive) "● Fast Charging" else "Standby",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAcActive) INDIGO else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 RowKV("Drawing Now", fmt(s?.acIn, " W"))
                 RowKV("AC Voltage", fmt(s?.acInV, " V"))
                 RowKV("AC Frequency", fmt(s?.acInF, " Hz"))
-                RowKV("AC Active?", if ((s?.acIn ?: 0.0) > 5) "Yes" else "No")
+                RowKV("AC Active?", if (isAcActive) "Yes" else "No")
                 RowKV("Used Today", fmtWh(e.todayAc))
                 RowKV("Used This Session", fmtWh(e.sessAc))
                 RowKV("Total AC Used", fmtWh(e.totalAc))
@@ -636,7 +794,7 @@ fun SolarAc(ui: UiState, store: Store) {
 
 // ===================================================================== history
 @Composable
-fun HistoryScreen(ui: UiState) {
+fun HistoryScreen(ui: UiState, store: Store? = null) {
     var hours by remember { mutableIntStateOf(1) }
     var showSoc by remember { mutableStateOf(true) }
     var showInW by remember { mutableStateOf(true) }
@@ -671,7 +829,9 @@ fun HistoryScreen(ui: UiState) {
 
         Text("Metrics to display", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(
@@ -731,14 +891,16 @@ fun HistoryScreen(ui: UiState) {
 
         val now = System.currentTimeMillis()
         val t0 = now - (hours * 3_600_000L)
-        val pts = ui.history.filter { it.t >= t0 }
-        val activeMaxValues = pts.map { p ->
-            listOfNotNull(
-                if (showInW) p.inW else null,
-                if (showOutW) p.outW else null,
-                if (showSolar) p.solar else null,
-                if (showAcIn) p.acIn else null,
-            ).maxOrNull() ?: 0.0
+        val pts = remember(ui.history, hours) { ui.history.filter { it.t >= t0 } }
+        val activeMaxValues = remember(pts, showInW, showOutW, showSolar, showAcIn) {
+            pts.map { p ->
+                listOfNotNull(
+                    if (showInW) p.inW else null,
+                    if (showOutW) p.outW else null,
+                    if (showSolar) p.solar else null,
+                    if (showAcIn) p.acIn else null,
+                ).maxOrNull() ?: 0.0
+            }
         }
         val wMax = max(100.0, activeMaxValues.maxOrNull() ?: 100.0)
 
@@ -748,30 +910,70 @@ fun HistoryScreen(ui: UiState) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Canvas(Modifier.fillMaxSize().padding(16.dp)) {
-                for (i in 0..4) {
-                    val y = (size.height * i) / 4f
-                    drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
-                    val x = (size.width * i) / 4f
-                    drawLine(axisColor, Offset(x, 0f), Offset(x, size.height), 0.5f)
-                }
-                if (pts.size < 2) return@Canvas
-                fun line(color: Color, top: Double, get: (Sample) -> Double?) {
-                    val path = Path()
-                    var started = false
-                    for (p in pts) {
-                        val v = get(p) ?: continue
-                        val x = ((p.t - t0).toFloat() / (now - t0)) * size.width
-                        val y = size.height * (1f - (v.coerceIn(0.0, top) / top).toFloat())
-                        if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+            Box(Modifier.fillMaxSize().padding(16.dp)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    for (i in 0..4) {
+                        val y = (size.height * i) / 4f
+                        drawLine(axisColor, Offset(0f, y), Offset(size.width, y), 1f)
+                        val x = (size.width * i) / 4f
+                        drawLine(axisColor, Offset(x, 0f), Offset(x, size.height), 0.5f)
                     }
-                    drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                    if (pts.size < 2) return@Canvas
+                    val timeSpan = maxOf(1L, now - t0)
+                    fun line(color: Color, top: Double, get: (Sample) -> Double?) {
+                        val path = Path()
+                        var started = false
+                        for (p in pts) {
+                            val v = get(p) ?: continue
+                            val x = (((p.t - t0).toFloat() / timeSpan) * size.width).coerceIn(0f, size.width)
+                            val y = size.height * (1f - (v.coerceIn(0.0, top) / top).toFloat())
+                            if (!started) { path.moveTo(x, y); started = true } else path.lineTo(x, y)
+                        }
+                        drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                    }
+                    if (showSoc) line(EMERALD, 100.0) { it.soc }
+                    if (showInW) line(CYAN, wMax) { it.inW }
+                    if (showOutW) line(ORANGE, wMax) { it.outW }
+                    if (showSolar) line(AMBER, wMax) { it.solar }
+                    if (showAcIn) line(INDIGO, wMax) { it.acIn }
                 }
-                if (showSoc) line(EMERALD, 100.0) { it.soc }
-                if (showInW) line(CYAN, wMax) { it.inW }
-                if (showOutW) line(ORANGE, wMax) { it.outW }
-                if (showSolar) line(AMBER, wMax) { it.solar }
-                if (showAcIn) line(INDIGO, wMax) { it.acIn }
+
+                // Y-Axis Watts Scale Overlay
+                Column(
+                    Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("${wMax.toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                    Text("${(wMax * 0.75).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("${(wMax * 0.5).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("${(wMax * 0.25).toInt()} W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("0 W", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                }
+
+                // Battery % Scale Overlay on Right Side if Battery enabled
+                if (showSoc) {
+                    Column(
+                        Modifier.fillMaxHeight().align(Alignment.TopEnd),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text("100%", fontSize = 9.sp, color = EMERALD, fontWeight = FontWeight.Bold)
+                        Text("75%", fontSize = 9.sp, color = EMERALD.copy(alpha = 0.7f))
+                        Text("50%", fontSize = 9.sp, color = EMERALD.copy(alpha = 0.7f))
+                        Text("25%", fontSize = 9.sp, color = EMERALD.copy(alpha = 0.7f))
+                        Text("0%", fontSize = 9.sp, color = EMERALD.copy(alpha = 0.7f))
+                    }
+                }
+
+                // Empty State Overlay if insufficient samples
+                if (pts.size < 2) {
+                    Text(
+                        "Collecting power history samples...",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
             }
         }
 
@@ -792,22 +994,333 @@ fun HistoryScreen(ui: UiState) {
             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // Daily Energy History Card
-        Card(
-            Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                RowKV("Date (solar / AC / in / out)", "")
-                e.days.keys.asSequence().sortedDescending().take(30).forEach { d ->
-                    val r = e.days.getValue(d)
-                    RowKV(d, "${fmtWh(r[0])} / ${fmtWh(r[1])} / ${fmtWh(r[2])} / ${fmtWh(r[3])}")
+        // Summary stats for selected time window
+        val peakSolarWin = pts.mapNotNull { it.solar }.maxOrNull() ?: 0.0
+        val peakInWin = pts.mapNotNull { it.inW }.maxOrNull() ?: 0.0
+        val peakOutWin = pts.mapNotNull { it.outW }.maxOrNull() ?: 0.0
+        val minSocWin = pts.mapNotNull { it.soc }.minOrNull()
+        val maxSocWin = pts.mapNotNull { it.soc }.maxOrNull()
+
+        if (pts.isNotEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (showSolar) StatChip("Peak Solar", "${peakSolarWin.toInt()} W", AMBER)
+                if (showInW) StatChip("Peak In", "${peakInWin.toInt()} W", CYAN)
+                if (showOutW) StatChip("Peak Out", "${peakOutWin.toInt()} W", ORANGE)
+                if (showSoc && minSocWin != null && maxSocWin != null) {
+                    StatChip("Battery Range", "${minSocWin.toInt()}%–${maxSocWin.toInt()}%", EMERALD)
                 }
             }
+        }
+
+        // Daily Energy History Section with Calendar View Toggle
+        var showCalendar by remember { mutableStateOf(true) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = showCalendar, onClick = { showCalendar = true }, label = { Text("Calendar View") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            )
+            FilterChip(
+                selected = !showCalendar, onClick = { showCalendar = false }, label = { Text("List View") },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            )
+        }
+
+        if (showCalendar) {
+            CalendarHistoryCard(e, store)
+        } else {
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("Daily Energy History", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    RowKV("Date (solar / AC / in / out)", "")
+                    e.days.keys.asSequence().sortedDescending().take(30).forEach { d ->
+                        val r = e.days.getValue(d)
+                        RowKV(d, "${fmtWh(r.getOrNull(0) ?: 0.0)} / ${fmtWh(r.getOrNull(1) ?: 0.0)} / ${fmtWh(r.getOrNull(2) ?: 0.0)} / ${fmtWh(r.getOrNull(3) ?: 0.0)}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CalendarHistoryCard(e: Energy, store: Store? = null) {
+    var currentYearMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now().toString()) }
+    val todayStr = remember { LocalDate.now().toString() }
+
+    val price = store?.price?.toDouble() ?: 0.0
+    val cur = store?.currency ?: "$"
+    fun money(wh: Double): String =
+        if (price > 0) String.format(Locale.US, " (%s%.2f)", cur, (wh / 1000.0) * price) else ""
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            // Month Header with Prev/Next Navigation
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Daily Energy Calendar", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(onClick = { currentYearMonth = currentYearMonth.minusMonths(1) }) {
+                        Text("‹", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                    val monthFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)
+                    Text(
+                        currentYearMonth.format(monthFormatter),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    TextButton(onClick = { currentYearMonth = currentYearMonth.plusMonths(1) }) {
+                        Text("›", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Monthly Energy Totals Summary Banner
+            val monthPrefix = currentYearMonth.toString()
+            val monthRecords = e.days.filterKeys { it.startsWith(monthPrefix) }
+            val monthSolar = monthRecords.values.sumOf { it.getOrNull(0) ?: 0.0 }
+            val monthAc = monthRecords.values.sumOf { it.getOrNull(1) ?: 0.0 }
+
+            if (monthSolar > 0 || monthAc > 0) {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Month Total:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Solar ${fmtWh(monthSolar)}${money(monthSolar)}  •  AC ${fmtWh(monthAc)}${money(monthAc)}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // Days of Week Header
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa").forEach { dayName ->
+                    Text(
+                        dayName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(36.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            // Calendar Month Grid
+            val firstDayOfMonth = currentYearMonth.atDay(1)
+            val daysInMonth = currentYearMonth.lengthOfMonth()
+            val startOffset = firstDayOfMonth.dayOfWeek.value % 7
+            val totalCells = startOffset + daysInMonth
+            val rowsCount = (totalCells + 6) / 7
+
+            for (row in 0 until rowsCount) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                    for (col in 0 until 7) {
+                        val cellIndex = row * 7 + col
+                        val dayNum = cellIndex - startOffset + 1
+                        if (cellIndex < startOffset || dayNum > daysInMonth) {
+                            Box(Modifier.size(36.dp))
+                        } else {
+                            val date = currentYearMonth.atDay(dayNum)
+                            val dateStr = date.toString()
+                            val r = e.days[dateStr]
+                            val isSelected = dateStr == selectedDate
+                            val isToday = dateStr == todayStr
+
+                            val solarVal = r?.getOrNull(0) ?: 0.0
+                            val acVal = r?.getOrNull(1) ?: 0.0
+                            val inVal = r?.getOrNull(2) ?: 0.0
+                            val outVal = r?.getOrNull(3) ?: 0.0
+                            val hasData = solarVal > 0 || acVal > 0 || inVal > 0 || outVal > 0
+
+                            Surface(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
+                                color = when {
+                                    isSelected -> MaterialTheme.colorScheme.primaryContainer
+                                    hasData -> EMERALD.copy(alpha = 0.12f)
+                                    else -> Color.Transparent
+                                },
+                                border = when {
+                                    isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                    isToday -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                                    else -> null
+                                },
+                                onClick = { selectedDate = dateStr }
+                            ) {
+                                Column(
+                                    Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        "$dayNum",
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.Medium,
+                                        color = when {
+                                            isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                                            isToday -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                    if (solarVal > 0 || acVal > 0) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (solarVal > 0) {
+                                                Box(
+                                                    Modifier
+                                                        .size(4.dp)
+                                                        .clip(CircleShape)
+                                                        .background(EMERALD)
+                                                )
+                                            }
+                                            if (acVal > 0) {
+                                                Box(
+                                                    Modifier
+                                                        .size(4.dp)
+                                                        .clip(CircleShape)
+                                                        .background(INDIGO)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(12.dp))
+
+            // Selected Day Details
+            val selectedRecord = e.days[selectedDate]
+            val parsedDate = try {
+                LocalDate.parse(selectedDate).format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US))
+            } catch (_: Exception) {
+                selectedDate
+            }
+
+            val selSolar = selectedRecord?.getOrNull(0) ?: 0.0
+            val selAc = selectedRecord?.getOrNull(1) ?: 0.0
+            val selIn = selectedRecord?.getOrNull(2) ?: 0.0
+            val selOut = selectedRecord?.getOrNull(3) ?: 0.0
+
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (selectedDate == todayStr) "$parsedDate (Today)" else parsedDate,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (selectedRecord == null) {
+                        Text("No data", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (selectedRecord != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        EnergyStatItem("Solar", fmtWh(selSolar), EMERALD, money(selSolar))
+                        EnergyStatItem("AC Charge", fmtWh(selAc), INDIGO, money(selAc))
+                        EnergyStatItem("Grid In", fmtWh(selIn), CYAN)
+                        EnergyStatItem("Grid Out", fmtWh(selOut), ORANGE)
+                    }
+                } else {
+                    Text(
+                        "No energy history recorded for this date.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EnergyStatItem(label: String, value: String, color: Color, subValue: String = "") {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(2.dp))
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+        if (subValue.isNotEmpty()) {
+            Text(subValue.trim(), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun StatChip(label: String, value: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.3f))
+    ) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
         }
     }
 }
@@ -817,57 +1330,140 @@ fun HistoryScreen(ui: UiState) {
 fun RawScreen(ui: UiState) {
     var q by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(ui.raw.isEmpty()) }
+    var copyNotice by remember { mutableStateOf<String?>(null) }
     @Suppress("DEPRECATION")
     val clip = LocalClipboardManager.current
 
+    val rows = remember(ui.raw, q) {
+        ui.raw.entries.asSequence().sortedBy { it.key }.filter {
+            q.isBlank() || it.key.contains(q, ignoreCase = true) || it.value.toString().contains(q, ignoreCase = true)
+        }.toList()
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !showLog, onClick = { showLog = false }, label = { Text("Values") },
-                shape = RoundedCornerShape(20.dp)
-            )
-            FilterChip(
-                selected = showLog, onClick = { showLog = true }, label = { Text("Log") },
-                shape = RoundedCornerShape(20.dp)
-            )
-            if (showLog) {
-                Spacer(Modifier.weight(1f))
-                TextButton({ clip.setText(AnnotatedString(ui.debug.joinToString("\n"))) }) { Text("Copy Log") }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !showLog, onClick = { showLog = false },
+                    label = { Text("Values (${ui.raw.size})") },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                )
+                FilterChip(
+                    selected = showLog, onClick = { showLog = true },
+                    label = { Text("Log (${ui.debug.size})") },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                )
+            }
+
+            if (showLog && ui.debug.isNotEmpty()) {
+                TextButton(onClick = {
+                    clip.setText(AnnotatedString(ui.debug.joinToString("\n")))
+                    copyNotice = "Log copied!"
+                }) {
+                    Text("Copy Log")
+                }
+            } else if (!showLog && rows.isNotEmpty()) {
+                TextButton(onClick = {
+                    val text = rows.joinToString("\n") { "${it.key}: ${it.value}" }
+                    clip.setText(AnnotatedString(text))
+                    copyNotice = "Values copied!"
+                }) {
+                    Text("Copy All")
+                }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        if (copyNotice != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                copyNotice!!,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = EMERALD,
+                modifier = Modifier.align(Alignment.End)
+            )
+            LaunchedEffect(copyNotice) {
+                kotlinx.coroutines.delay(2000.milliseconds)
+                copyNotice = null
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         if (showLog) {
             Text("Connection log (newest first). Credentials are masked.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            LazyColumn(Modifier.padding(top = 8.dp)) {
-                items(ui.debug) { line ->
-                    Text(line, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            if (ui.debug.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No log entries recorded yet.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn {
+                    items(ui.debug) { line ->
+                        Text(line, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             return
         }
 
-        val rows = ui.raw.entries.asSequence().sortedBy { it.key }.filter {
-            q.isBlank() || it.key.contains(q, ignoreCase = true) || it.value.toString().contains(q, ignoreCase = true)
-        }.toList()
-
         OutlinedTextField(
-            q, { q = it }, label = { Text("Filter MQTT parameters") }, singleLine = true,
-            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+            q, { q = it },
+            label = { Text("Filter MQTT parameters") },
+            singleLine = true,
+            trailingIcon = {
+                if (q.isNotEmpty()) {
+                    TextButton(onClick = { q = "" }) {
+                        Text("✕", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
         )
 
-        LazyColumn(Modifier.padding(top = 10.dp)) {
-            items(rows) { r ->
-                Card(
-                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(r.key, fontSize = 12.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(r.value.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Spacer(Modifier.height(10.dp))
+
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(top = 32.dp), contentAlignment = Alignment.TopCenter) {
+                Text(
+                    if (q.isBlank()) "No MQTT parameters received yet." else "No parameters match '$q'",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn {
+                items(rows) { r ->
+                    Card(
+                        onClick = {
+                            clip.setText(AnnotatedString("${r.key}: ${r.value}"))
+                            copyNotice = "Copied '${r.key}'"
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(r.key, fontSize = 12.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(8.dp))
+                            Text(r.value.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
             }
@@ -877,11 +1473,11 @@ fun RawScreen(ui: UiState) {
 
 // ===================================================================== settings
 @Composable
-fun SettingsScreen(store: Store) {
+fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val appVersion = remember { getAppVersion(ctx) }
     var model by remember { mutableStateOf(store.model) }
-    var price by remember { mutableStateOf(store.price.toString()) }
+    var price by remember { mutableStateOf(if (store.price == 0f) "" else store.price.toString()) }
     var cur by remember { mutableStateOf(store.currency) }
     var low by remember { mutableStateOf(store.lowSoc.toString()) }
     var crit by remember { mutableStateOf(store.critSoc.toString()) }
@@ -889,7 +1485,7 @@ fun SettingsScreen(store: Store) {
     var temp by remember { mutableStateOf(store.highTemp.toString()) }
     var over by remember { mutableStateOf(store.overloadW.toString()) }
     val num = KeyboardOptions(keyboardType = KeyboardType.Number)
-    var savedMessage by remember { mutableStateOf(value = false) }
+    var savedMessage by remember { mutableStateOf(false) }
 
     @Composable
     fun field(label: String, v: String, set: (String) -> Unit, kb: KeyboardOptions = num) =
@@ -903,14 +1499,14 @@ fun SettingsScreen(store: Store) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("App & Device Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -924,26 +1520,106 @@ fun SettingsScreen(store: Store) {
                 )
             }
         }
-        Text("Configure device model, currency, electricity pricing, and alert thresholds.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(4.dp))
 
-        Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            MODELS.keys.forEach { m ->
-                FilterChip(
-                    selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
-                    shape = RoundedCornerShape(16.dp)
-                )
+        // Section 1: Account & Connection Info
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("ACCOUNT & CONNECTION", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+                RowKV("EcoFlow Account", store.email.ifEmpty { "Not set" })
+                RowKV("Device Serial (S/N)", store.sn.ifEmpty { "Not set" })
+                RowKV("Region", store.region)
+
+                if (onLogout != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = onLogout,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CRIMSON.copy(alpha = 0.12f), contentColor = CRIMSON),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Sign Out / Switch Account", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
             }
         }
-        field("Electricity price per kWh", price, { price = it }, KeyboardOptions(keyboardType = KeyboardType.Decimal))
-        field("Currency symbol", cur, { cur = it }, KeyboardOptions.Default)
-        field("Low battery alert %", low, { low = it })
-        field("Critical alert %", crit, { crit = it })
-        field("Fully charged at %", full, { full = it })
-        field("High temperature °C", temp, { temp = it })
-        field("Overload alert (W)", over, { over = it })
 
+        // Section 2: Device Model & Pricing
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("DEVICE & PRICING", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+
+                Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MODELS.keys.forEach { m ->
+                        FilterChip(
+                            selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    }
+                }
+
+                field("Electricity price per kWh", price, { price = it; savedMessage = false }, KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                field("Currency symbol", cur, { cur = it; savedMessage = false }, KeyboardOptions.Default)
+            }
+        }
+
+        // Section 3: Alerts & Safety Thresholds
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("ALERT THRESHOLDS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+
+                field("Low battery alert %", low, { low = it; savedMessage = false })
+                field("Critical alert %", crit, { crit = it; savedMessage = false })
+                field("Fully charged at %", full, { full = it; savedMessage = false })
+                field("High temperature °C", temp, { temp = it; savedMessage = false })
+                field("Overload alert (W)", over, { over = it; savedMessage = false })
+            }
+        }
+
+        // Section 4: Advanced & Debug
+        var showRaw by remember { mutableStateOf(store.showRawTab) }
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("ADVANCED & DEBUG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Show Raw Telemetry Tab", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Exposes raw MQTT parameters & debug logs for developers", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = showRaw,
+                        onCheckedChange = { showRaw = it; savedMessage = false }
+                    )
+                }
+            }
+        }
+
+        // Save Button & Confirmation Banner
         Button(
             onClick = {
                 store.model = model
@@ -954,6 +1630,7 @@ fun SettingsScreen(store: Store) {
                 store.fullSoc = full.toIntOrNull() ?: 100
                 store.highTemp = temp.toIntOrNull() ?: 45
                 store.overloadW = over.toIntOrNull() ?: 700
+                store.showRawTab = showRaw
                 savedMessage = true
             },
             shape = RoundedCornerShape(12.dp),
@@ -961,20 +1638,33 @@ fun SettingsScreen(store: Store) {
         ) {
             Text("Save Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
+
         if (savedMessage) {
-            Text("Settings saved successfully!", color = EMERALD, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = EMERALD.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, EMERALD.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "✓ Settings saved successfully!",
+                    color = EMERALD,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(12.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(Modifier.height(8.dp))
         Text(
             "EcoMonitor v$appVersion",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
-
         Spacer(Modifier.height(32.dp))
     }
 }

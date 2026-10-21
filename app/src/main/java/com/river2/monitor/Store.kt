@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 /** Credentials and settings are stored encrypted on the device. */
+@Suppress("DEPRECATION")
 class Store(ctx: Context) {
     private val sp: SharedPreferences = EncryptedSharedPreferences.create(
         ctx, "river2_secure",
@@ -57,6 +58,9 @@ class Store(ctx: Context) {
     var overloadW: Int
         get() = i("overload", 700)
         set(v) { sp.edit().putInt("overload", v).apply() }
+    var showRawTab: Boolean
+        get() = sp.getBoolean("showRawTab", false)
+        set(v) { sp.edit().putBoolean("showRawTab", v).apply() }
     var githubRepo: String
         get() = s("githubRepo", "gilomto-cloud/Ecomonitor")
         set(v) { sp.edit().putString("githubRepo", v).apply() }

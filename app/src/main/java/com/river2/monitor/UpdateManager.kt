@@ -1,5 +1,6 @@
 package com.river2.monitor
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -42,6 +43,7 @@ class UpdateManager(
         }
     }
 
+    @SuppressLint("QueryPermissionsNeeded")
     private fun postUpdateNotification(release: ReleaseInfo) {
         try {
             val nm = context.getSystemService(NotificationManager::class.java)
@@ -86,12 +88,13 @@ class UpdateManager(
                 .header("Accept", "application/vnd.github.v3+json")
                 .build()
 
-            val response = http.newCall(req).execute()
-            if (response.code != 200) {
+            val (code, body) = http.newCall(req).execute().use { resp ->
+                resp.code to resp.body.string()
+            }
+            if (code != 200 || body.isEmpty()) {
                 return@withContext null
             }
 
-            val body = response.body.string()
             val json = JSONObject(body)
             val tagName = json.optString("tag_name", "")
             val versionName = tagName.removePrefix("v").removePrefix("V").trim()
