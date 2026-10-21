@@ -35,9 +35,14 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare signing keystore
-        if: ${{ env.ECO_STORE_BASE64 != '' }}
         run: |
-          echo "$ECO_STORE_BASE64" | base64 --decode > app/keystore.jks
+          if [ -n "$ECO_STORE_BASE64" ]; then
+            echo "Decoding release keystore from ECO_STORE_BASE64 secret..."
+            echo "$ECO_STORE_BASE64" | base64 --decode > app/keystore.jks
+          else
+            echo "No ECO_STORE_BASE64 secret provided. Generating default release keystore..."
+            ./gradlew generateKeystore
+          fi
           ls -l app/keystore.jks
 
       - name: Determine Automated SemVer & Version Code
@@ -48,7 +53,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           else
-            TAG_NAME=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.0")
+            TAG_NAME=$(git describe --tags --abbrev=0 2>/devnull || echo "v1.2.0")
           fi
 
           SEMVER="${TAG_NAME#v}"
@@ -76,14 +81,6 @@ jobs:
         env:
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
-          ECO_STORE_FILE: ${{ env.ECO_STORE_BASE64 != '' && 'app/keystore.jks' || '' }}
-          ECO_STORE_PASSWORD: ${{ env.ECO_STORE_PASSWORD }}
-          ECO_KEY_ALIAS: ${{ env.ECO_KEY_ALIAS }}
-          ECO_KEY_PASSWORD: ${{ env.ECO_KEY_PASSWORD }}
-          RELEASE_STORE_FILE: ${{ env.ECO_STORE_BASE64 != '' && 'app/keystore.jks' || '' }}
-          RELEASE_STORE_PASSWORD: ${{ env.ECO_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ env.ECO_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ env.ECO_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:
