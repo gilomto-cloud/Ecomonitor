@@ -12,11 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      ECO_STORE_BASE64: ${{ secrets.ECO_STORE_BASE64 }}
-      ECO_STORE_PASSWORD: ${{ secrets.ECO_STORE_PASSWORD }}
-      ECO_KEY_ALIAS: ${{ secrets.ECO_KEY_ALIAS }}
-      ECO_KEY_PASSWORD: ${{ secrets.ECO_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +30,8 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Prepare signing keystore
+        env:
+          ECO_STORE_BASE64: ${{ secrets.ECO_STORE_BASE64 }}
         run: |
           if [ -n "$ECO_STORE_BASE64" ]; then
             echo "Decoding release keystore from ECO_STORE_BASE64 secret..."
