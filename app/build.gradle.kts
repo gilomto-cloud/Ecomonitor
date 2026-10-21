@@ -141,15 +141,19 @@ tasks.register("generateKeystore") {
         val file = keystoreFile.asFile
         if (!file.exists()) {
             file.parentFile.mkdirs()
-            val javaHome = System.getProperty("java.home")
-            val keytoolPath = File(javaHome, "bin/keytool.exe").takeIf { it.exists() }
-                ?: File(javaHome, "bin/keytool").takeIf { it.exists() }
+            val javaHomeSys = System.getProperty("java.home")
+            val javaHomeEnv = System.getenv("JAVA_HOME")
+            val keytoolPath = sequenceOf(javaHomeSys, javaHomeEnv)
+                .filterNotNull()
+                .flatMap { sequenceOf(File(it, "bin/keytool.exe"), File(it, "bin/keytool")) }
+                .firstOrNull { it.exists() }
                 ?: File("keytool")
 
             val process = ProcessBuilder(
                 keytoolPath.absolutePath,
-                "-genkey", "-v",
+                "-genkeypair", "-v",
                 "-keystore", file.absolutePath,
+                "-storetype", "JKS",
                 "-keyalg", "RSA",
                 "-keysize", "2048",
                 "-validity", "10000",

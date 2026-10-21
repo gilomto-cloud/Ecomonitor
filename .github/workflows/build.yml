@@ -31,9 +31,13 @@ jobs:
         env:
           ECO_STORE_BASE64: ${{ secrets.ECO_STORE_BASE64 }}
         run: |
-          if [ -n "$ECO_STORE_BASE64" ]; then
+          STRIPPED_SECRET=$(echo "$ECO_STORE_BASE64" | tr -d '[:space:]')
+          if [ -n "$STRIPPED_SECRET" ]; then
             echo "Decoding release keystore from ECO_STORE_BASE64 secret..."
-            echo "$ECO_STORE_BASE64" | base64 --decode > app/keystore.jks
+            echo "$STRIPPED_SECRET" | base64 -d > app/keystore.jks || echo "$STRIPPED_SECRET" | base64 --decode > app/keystore.jks || {
+              echo "Base64 decode failed, generating default release keystore..."
+              ./gradlew generateKeystore
+            }
           else
             echo "No ECO_STORE_BASE64 secret provided. Generating default release keystore..."
             ./gradlew generateKeystore
