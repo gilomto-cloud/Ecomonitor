@@ -38,7 +38,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          platforms: android-37
+          packages: platforms;android-37
+          accept-android-sdk-licenses: true
 
       - name: Configure local.properties for Android SDK
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
