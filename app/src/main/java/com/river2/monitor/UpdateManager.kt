@@ -24,7 +24,7 @@ data class ReleaseInfo(
 
 class UpdateManager(
     private val context: Context,
-    private val repo: String = "gilomto-cloud/Ecomonitor",
+    private val repo: String = "gilomto-cloud/EcoMonitor",
 ) {
 
     private val http = OkHttpClient.Builder()

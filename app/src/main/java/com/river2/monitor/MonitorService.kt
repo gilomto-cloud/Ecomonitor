@@ -27,6 +27,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlin.time.Duration.Companion.milliseconds
 
 class MonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -96,7 +97,7 @@ class MonitorService : Service() {
                 val began = System.currentTimeMillis()
                 s.start()
                 while (isActive) {
-                    delay(10_000)
+                    delay(10_000.milliseconds)
                     s.requestQuotas()
                     val now = System.currentTimeMillis()
                     if (s.lastMsg == 0L && now - began > 25_000) {
@@ -137,7 +138,7 @@ class MonitorService : Service() {
                 Repo.state.update { it.copy(cmdResult = "Sending command…") }
                 s.send(body)
                 if (body.optString("operateType") == "dcOutCfg") {
-                    delay(300)
+                    delay(300.milliseconds)
                     try {
                         val clone = JSONObject(body.toString())
                         clone.put("moduleType", 1)
@@ -145,7 +146,7 @@ class MonitorService : Service() {
                     } catch (_: Exception) {}
                 }
                 Repo.state.update { it.copy(cmdResult = "✓ Command sent — waiting for device confirmation…") }
-                delay(2500)
+                delay(2500.milliseconds)
                 s.requestQuotas()
             } catch (e: Exception) {
                 Repo.state.update { it.copy(cmdResult = "✗ ${e.message ?: "Failed to send command"}") }
@@ -176,6 +177,7 @@ class MonitorService : Service() {
             status = "● Connected — updated $t", connected = true, raw = raw, summary = s,
             energy = energy.copy(), history = if (newSample) history.toList() else prev.history,
         )
+        updateWidget(s)
         getSystemService(NotificationManager::class.java).notify(
             1, notif("${fmt(s.soc, "%")}  •  in ${fmt(s.inW, " W")}  •  out ${fmt(s.outW, " W")}"))
     }
@@ -251,5 +253,39 @@ class MonitorService : Service() {
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
             .setContentTitle("River 2").setContentText(text)
             .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(pi).build()
+    }
+
+    private fun updateWidget(s: Summary) {
+        val soc = (s.soc ?: 0.0).toInt()
+        val savedWh = energy.todaySolar
+        store.widgetSoc = soc
+        store.widgetConnected = true
+        store.widgetStatus = if (soc > 0) "Connected" else "Idle"
+        store.widgetInW = s.inW.toInt()
+        store.widgetOutW = s.outW.toInt()
+        store.widgetSolar = (s.solar ?: 0.0).toInt()
+        store.widgetSavedWh = savedWh
+
+        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(this)
+        val provider = android.content.ComponentName(this, EcoMonitorWidgetProvider::class.java)
+        val ids = appWidgetManager.getAppWidgetIds(provider)
+        if (ids.isNotEmpty()) {
+            val views = android.widget.RemoteViews(packageName, R.layout.widget_status)
+            views.setTextViewText(R.id.widgetTitle, if (store.widgetConnected) "LIVE" else "OFFLINE")
+            views.setTextViewText(R.id.widgetStatus, store.widgetStatus)
+            views.setTextViewText(R.id.widgetSoc, "${soc}%")
+            views.setTextViewText(R.id.widgetFlow, "In ${store.widgetInW}W • Out ${store.widgetOutW}W")
+            views.setTextViewText(R.id.widgetSolar, "Solar ${store.widgetSolar}W")
+            views.setTextViewText(R.id.widgetSaved, "Saved ${if (savedWh >= 1000) String.format(java.util.Locale.US, "%.2f kWh", savedWh / 1000.0) else String.format(java.util.Locale.US, "%.0f Wh", savedWh)}")
+            val intent = Intent(this, MainActivity::class.java)
+            val pending = PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            views.setOnClickPendingIntent(R.id.widgetRoot, pending)
+            appWidgetManager.updateAppWidget(ids, views)
+        }
     }
 }

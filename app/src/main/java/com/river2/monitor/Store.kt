@@ -62,8 +62,29 @@ class Store(ctx: Context) {
         get() = sp.getBoolean("showRawTab", false)
         set(v) { sp.edit().putBoolean("showRawTab", v).apply() }
     var githubRepo: String
-        get() = s("githubRepo", "gilomto-cloud/Ecomonitor")
+        get() = s("githubRepo", "gilomto-cloud/EcoMonitor")
         set(v) { sp.edit().putString("githubRepo", v).apply() }
+    var widgetSoc: Int
+        get() = i("widgetSoc", 0)
+        set(v) { sp.edit().putInt("widgetSoc", v).apply() }
+    var widgetConnected: Boolean
+        get() = sp.getBoolean("widgetConnected", false)
+        set(v) { sp.edit().putBoolean("widgetConnected", v).apply() }
+    var widgetStatus: String
+        get() = s("widgetStatus", "Offline")
+        set(v) { sp.edit().putString("widgetStatus", v).apply() }
+    var widgetInW: Int
+        get() = i("widgetInW", 0)
+        set(v) { sp.edit().putInt("widgetInW", v).apply() }
+    var widgetOutW: Int
+        get() = i("widgetOutW", 0)
+        set(v) { sp.edit().putInt("widgetOutW", v).apply() }
+    var widgetSolar: Int
+        get() = i("widgetSolar", 0)
+        set(v) { sp.edit().putInt("widgetSolar", v).apply() }
+    var widgetSavedWh: Double
+        get() = sp.getFloat("widgetSavedWh", 0f).toDouble()
+        set(v) { sp.edit().putFloat("widgetSavedWh", v.toFloat()).apply() }
 
     fun loadEnergy(): Energy {
         val today = LocalDate.now().toString()

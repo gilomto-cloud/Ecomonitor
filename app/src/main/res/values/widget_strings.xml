@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">EcoMonitor power status</string>
+    <string name="widget_live">LIVE</string>
+    <string name="widget_offline">OFFLINE</string>
+    <string name="widget_connected">Connected</string>
+    <string name="widget_idle">Idle</string>
+    <string name="widget_default_soc">82%</string>
+    <string name="widget_default_solar">Solar 320W</string>
+    <string name="widget_default_saved">Saved 1.25 kWh</string>
+    <string name="widget_default_flow">In 420W • Out 140W</string>
+    <string name="widget_refresh">Refresh</string>
+</resources>
