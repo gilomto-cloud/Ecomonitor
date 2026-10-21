@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -10,16 +13,42 @@ base {
 val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 10203
 val appVersionName = System.getenv("VERSION_NAME") ?: "1.2.3"
 
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+val releaseStoreFile = System.getenv("ECO_STORE_FILE")
+    ?: localProperties.getProperty("ECO_STORE_FILE")
+    ?: localProperties.getProperty("RELEASE_STORE_FILE")
+val releaseStorePassword = System.getenv("ECO_STORE_PASSWORD")
+    ?: localProperties.getProperty("ECO_STORE_PASSWORD")
+    ?: localProperties.getProperty("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ECO_KEY_ALIAS")
+    ?: localProperties.getProperty("ECO_KEY_ALIAS")
+    ?: localProperties.getProperty("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ECO_KEY_PASSWORD")
+    ?: localProperties.getProperty("ECO_KEY_PASSWORD")
+    ?: localProperties.getProperty("RELEASE_KEY_PASSWORD")
+
+val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.river2.monitor"
     compileSdk = 37
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("keystore.jks")
-            storePassword = "ecomonitor123"
-            keyAlias = "ecomonitor"
-            keyPassword = "ecomonitor123"
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -37,7 +66,9 @@ android {
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -46,7 +77,14 @@ android {
             )
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+    testOptions {
+        unitTests.all {
+            it.useJUnit()
         }
     }
 }
@@ -71,4 +109,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.paho.mqtt)
     implementation(libs.androidx.security.crypto)
+
+    testImplementation(kotlin("test"))
+    testImplementation(libs.junit)
 }

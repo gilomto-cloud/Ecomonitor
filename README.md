@@ -26,3 +26,19 @@ EcoFlow's cloud only streams data for a device it considers "active", which is t
 official EcoFlow app being used. Open the official EcoFlow app once, then return here: data
 usually starts within seconds and keeps flowing for roughly 15 minutes after you close it.
 Also check the Raw tab > Log for connection details (tap "Copy log" to share it).
+
+## Local build setup
+
+For a local debug build, copy `local.properties.example` to `local.properties` and fill in the release signing values if you need to sign the app locally.
+
+Example:
+
+```properties
+sdk.dir=/path/to/Android/Sdk
+ECO_STORE_FILE=app/keystore.jks
+ECO_STORE_PASSWORD=your-release-store-password
+ECO_KEY_ALIAS=ecomonitor
+ECO_KEY_PASSWORD=your-key-password
+```
+
+You can also provide the same values as environment variables instead of storing them in `local.properties`.

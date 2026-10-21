@@ -13,6 +13,7 @@ class Cert(val uid: String, val url: String, val port: Int, val user: String, va
 
 /** Unofficial EcoFlow app login (same flow other community projects use). */
 object EcoFlowApi {
+    private const val MAX_LOGIN_ATTEMPTS = 3
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -31,12 +32,18 @@ object EcoFlowApi {
     }
 
     private fun call(req: Request): JSONObject {
-        val (code, text) = http.newCall(req).execute().use { r -> r.code to r.body.string() }
+        val response = http.newCall(req).execute()
+        val code = response.code
+        val text = response.body.string()
+        response.close()
+        if (code !in 200..299) {
+            throw IOException("HTTP $code: ${text.take(220).ifBlank { "empty response" }}")
+        }
         val j = try { JSONObject(text) } catch (_: Exception) {
             throw IOException("HTTP $code: invalid response")
         }
         if (j.optString("code") != "0") {
-            throw IOException("API ${j.optString("code")}: ${j.optString("message")}")
+            throw IOException("API ${j.optString("code")}: ${j.optString("message").ifBlank { "request failed" }}")
         }
         return j.optJSONObject("data") ?: JSONObject()
     }
@@ -52,25 +59,35 @@ object EcoFlowApi {
             JSONObject().put("email", e).put("password", pw).put("scene", "IOT_APP")
                 .put("userType", "ECOFLOW"),
         )
-        var data: JSONObject? = null
-        var last: Exception? = null
-        for (b in bodies) {
-            try {
-                val req = builder("$root/auth/login")
-                    .post(b.toString().toRequestBody("application/json".toMediaType())).build()
-                data = call(req)
-                break
-            } catch (ex: IOException) {
-                last = ex
+
+        var last: IOException? = null
+        for (attempt in 1..MAX_LOGIN_ATTEMPTS) {
+            for (b in bodies) {
+                try {
+                    val req = builder("$root/auth/login")
+                        .post(b.toString().toRequestBody("application/json".toMediaType())).build()
+                    val data = call(req)
+                    val token = data.optString("token").takeIf { it.isNotBlank() }
+                        ?: throw IOException("Login succeeded but token is missing")
+                    val uid = data.optJSONObject("user")?.optString("userId")
+                        ?: throw IOException("Login succeeded but userId is missing")
+                    val c = call(builder("$root/iot-auth/app/certification?userId=$uid", token).get().build())
+                    return Cert(
+                        uid,
+                        c.optString("url").takeIf { it.isNotBlank() } ?: throw IOException("Device certificate URL missing"),
+                        c.optString("port", "8883").toIntOrNull() ?: 8883,
+                        c.optString("certificateAccount").takeIf { it.isNotBlank() } ?: throw IOException("Certificate account missing"),
+                        c.optString("certificatePassword").takeIf { it.isNotBlank() } ?: throw IOException("Certificate password missing"),
+                    )
+                } catch (ex: IOException) {
+                    last = ex
+                }
+            }
+            if (attempt < MAX_LOGIN_ATTEMPTS) {
+                Thread.sleep((attempt * 500L))
             }
         }
-        val d = data ?: throw IOException("${last?.message} — check email, password and region")
-        val token = d.getString("token")
-        val uid = d.getJSONObject("user").getString("userId")
-        val c = call(builder("$root/iot-auth/app/certification?userId=$uid", token).get().build())
-        return Cert(
-            uid, c.getString("url"), c.optString("port", "8883").toInt(),
-            c.getString("certificateAccount"), c.getString("certificatePassword"),
-        )
+
+        throw IOException("${last?.message ?: "Login failed"} — check email, password and region")
     }
 }

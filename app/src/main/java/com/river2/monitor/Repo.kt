@@ -18,4 +18,9 @@ data class UiState(
 object Repo {
     val state = MutableStateFlow(UiState())
     var sender: ((JSONObject) -> Unit)? = null
+
+    fun reset() {
+        sender = null
+        state.value = UiState()
+    }
 }

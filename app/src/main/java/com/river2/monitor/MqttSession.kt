@@ -28,10 +28,12 @@ class MqttSession(
     private var lastEmit = 0L
     @Volatile var lastMsg = 0L
     @Volatile var connected = false
+    @Volatile private var stopped = false
 
     private fun topic(kind: String) = "/app/${cert.uid}/$sn/thing/property/$kind"
 
     fun start() {
+        stopped = false
         val cid = "ANDROID_${UUID.randomUUID().toString().uppercase()}_${cert.uid}"
         val c = MqttAsyncClient("ssl://${cert.url}:${cert.port}", cid, MemoryPersistence())
         val opts = MqttConnectOptions().apply {
@@ -131,7 +133,7 @@ class MqttSession(
 
     private fun publish(kind: String, body: JSONObject) {
         val c = client
-        if (c == null || !c.isConnected) {
+        if (c == null || !c.isConnected || stopped) {
             throw IllegalStateException("Not connected to EcoFlow cloud yet")
         }
         body.put("from", "Android").put("id", (100000..999999).random()).put("sn", sn)
@@ -142,7 +144,6 @@ class MqttSession(
         val token = c.publish(mainTopic, msg)
         token.waitForCompletion(5000)
 
-        // For "set" commands, also publish to /app/pad/property/SN for direct cloud routing
         if (kind == "set") {
             try {
                 val padTopic = "/app/pad/property/$sn"
@@ -155,7 +156,7 @@ class MqttSession(
     }
 
     fun requestQuotas() {
-        if (!connected) return
+        if (!connected || stopped) return
         try {
             publish("get", JSONObject().put("moduleType", 0).put("operateType", "latestQuotas")
                 .put("params", JSONObject()).put("version", "1.1"))
@@ -167,6 +168,7 @@ class MqttSession(
     }
 
     fun stop() {
+        stopped = true
         try { client?.disconnect(); client?.close() } catch (_: Exception) {}
     }
 }

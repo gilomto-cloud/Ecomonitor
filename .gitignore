@@ -1,5 +1,16 @@
+# Android / Gradle
 .gradle/
-build/
+**/build/
 local.properties
+*.jks
+*.keystore
+*.p12
 .idea/
 *.iml
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

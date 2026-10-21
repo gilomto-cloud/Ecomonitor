@@ -28,6 +28,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class MonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -41,6 +42,7 @@ class MonitorService : Service() {
     private val history = ArrayDeque<Sample>()
     private val flags = HashSet<String>()
     private val debugLog = ArrayDeque<String>()
+    private var started = false
 
     companion object {
         fun start(ctx: Context) {
@@ -62,6 +64,10 @@ class MonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, fl: Int, startId: Int): Int {
+        if (started) {
+            return START_STICKY
+        }
+        started = true
         val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
@@ -74,11 +80,11 @@ class MonitorService : Service() {
     }
 
     override fun onDestroy() {
+        started = false
         store.saveEnergy(energy)
         session?.stop()
         scope.cancel()
-        Repo.sender = null
-        Repo.state.value = UiState()
+        Repo.reset()
         super.onDestroy()
     }
 
@@ -100,11 +106,13 @@ class MonitorService : Service() {
                     delay(10_000.milliseconds)
                     s.requestQuotas()
                     val now = System.currentTimeMillis()
-                    if (s.lastMsg == 0L && now - began > 25_000) {
+                    val noDataThreshold = 25.seconds
+                    val staleDataThreshold = 90.seconds
+                    if (s.lastMsg == 0L && now - began > noDataThreshold.inWholeMilliseconds) {
                         status("Connected, but the cloud sent no data yet. Open the official " +
                             "EcoFlow app once to wake the device, then come back. " +
                             "Check Raw > Log for details.", true)
-                    } else if (s.lastMsg > 0 && now - s.lastMsg > 90_000) {
+                    } else if (s.lastMsg > 0 && now - s.lastMsg > staleDataThreshold.inWholeMilliseconds) {
                         status("⚠ No data for 90 s (device offline or asleep?)", false)
                     }
                 }

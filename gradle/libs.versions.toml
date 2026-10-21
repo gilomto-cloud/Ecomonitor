@@ -6,6 +6,7 @@ kotlinxCoroutinesAndroid = "1.11.0"
 okhttp = "5.5.0"
 pahoMqtt = "1.2.5"
 securityCrypto = "1.1.0"
+junit = "4.13.2"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
@@ -17,6 +18,7 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 paho-mqtt = { group = "org.eclipse.paho", name = "org.eclipse.paho.client.mqttv3", version.ref = "pahoMqtt" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version = "2.4.21" }
