@@ -10,8 +10,18 @@ base {
     archivesName.set("EcoMonitor")
 }
 
-val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 10203
-val appVersionName = System.getenv("VERSION_NAME") ?: "1.2.3"
+val rootPropertiesFile = rootProject.file("version.properties")
+val versionProperties = Properties()
+if (rootPropertiesFile.exists()) {
+    versionProperties.load(FileInputStream(rootPropertiesFile))
+}
+
+val appVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+    ?: versionProperties.getProperty("VERSION_CODE")?.toIntOrNull()
+    ?: 10203
+val appVersionName = System.getenv("VERSION_NAME")
+    ?: versionProperties.getProperty("VERSION_NAME")
+    ?: "1.2.3"
 
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties()

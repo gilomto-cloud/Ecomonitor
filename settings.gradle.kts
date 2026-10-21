@@ -15,5 +15,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "River2Monitor"
+rootProject.name = "EcoMonitor"
 include(":app")
