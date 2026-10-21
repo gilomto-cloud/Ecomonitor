@@ -30,43 +30,33 @@ if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
 
-val defaultKeystore = rootProject.file("app/keystore.jks")
-val hasDefaultKeystore = defaultKeystore.exists()
-
 val releaseStoreFile = System.getenv("ECO_STORE_FILE")
     ?: localProperties.getProperty("ECO_STORE_FILE")
     ?: localProperties.getProperty("RELEASE_STORE_FILE")
-    ?: if (hasDefaultKeystore) "app/keystore.jks" else null
+    ?: "app/keystore.jks"
 val releaseStorePassword = System.getenv("ECO_STORE_PASSWORD")
     ?: localProperties.getProperty("ECO_STORE_PASSWORD")
     ?: localProperties.getProperty("RELEASE_STORE_PASSWORD")
-    ?: if (hasDefaultKeystore) "android123" else null
+    ?: "android123"
 val releaseKeyAlias = System.getenv("ECO_KEY_ALIAS")
     ?: localProperties.getProperty("ECO_KEY_ALIAS")
     ?: localProperties.getProperty("RELEASE_KEY_ALIAS")
-    ?: if (hasDefaultKeystore) "ecomonitor" else null
+    ?: "ecomonitor"
 val releaseKeyPassword = System.getenv("ECO_KEY_PASSWORD")
     ?: localProperties.getProperty("ECO_KEY_PASSWORD")
     ?: localProperties.getProperty("RELEASE_KEY_PASSWORD")
-    ?: if (hasDefaultKeystore) "android123" else null
-
-val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() &&
-    !releaseStorePassword.isNullOrBlank() &&
-    !releaseKeyAlias.isNullOrBlank() &&
-    !releaseKeyPassword.isNullOrBlank()
+    ?: "android123"
 
 android {
     namespace = "com.river2.monitor"
     compileSdk = 37
 
-    if (hasReleaseSigning && releaseStoreFile != null) {
-        signingConfigs {
-            create("release") {
-                storeFile = rootProject.file(releaseStoreFile)
-                storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
-            }
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(releaseStoreFile)
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -84,9 +74,7 @@ android {
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     buildTypes {
         release {
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -95,9 +83,7 @@ android {
             )
         }
         debug {
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     testOptions {
