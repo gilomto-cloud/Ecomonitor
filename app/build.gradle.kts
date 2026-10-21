@@ -134,12 +134,12 @@ dependencies {
 
 tasks.register("generateKeystore") {
     group = "signing"
-    description = "Generates release keystore app/keystore.jks if missing"
+    description = "Generates release keystore app/keystore.jks if missing or empty"
     val keystoreFile = layout.projectDirectory.file("app/keystore.jks")
     outputs.file(keystoreFile)
     doLast {
         val file = keystoreFile.asFile
-        if (!file.exists()) {
+        if (!file.exists() || file.length() == 0L) {
             file.parentFile.mkdirs()
             val javaHomeSys = System.getProperty("java.home")
             val javaHomeEnv = System.getenv("JAVA_HOME")

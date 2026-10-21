@@ -34,10 +34,19 @@ jobs:
           STRIPPED_SECRET=$(echo "$ECO_STORE_BASE64" | tr -d '[:space:]')
           if [ -n "$STRIPPED_SECRET" ]; then
             echo "Decoding release keystore from ECO_STORE_BASE64 secret..."
-            echo "$STRIPPED_SECRET" | base64 -d > app/keystore.jks || echo "$STRIPPED_SECRET" | base64 --decode > app/keystore.jks || {
-              echo "Base64 decode failed, generating default release keystore..."
+            if echo "$STRIPPED_SECRET" | base64 -d > app/keystore.jks 2>/dev/null || echo "$STRIPPED_SECRET" | base64 --decode > app/keystore.jks 2>/dev/null; then
+              if [ -s app/keystore.jks ]; then
+                echo "Successfully decoded release keystore from ECO_STORE_BASE64 secret."
+              else
+                echo "Decoded keystore file is empty. Removing invalid file and generating default keystore..."
+                rm -f app/keystore.jks
+                ./gradlew generateKeystore
+              fi
+            else
+              echo "Base64 decoding failed. Removing invalid file and generating default keystore..."
+              rm -f app/keystore.jks
               ./gradlew generateKeystore
-            }
+            fi
           else
             echo "No ECO_STORE_BASE64 secret provided. Generating default release keystore..."
             ./gradlew generateKeystore
