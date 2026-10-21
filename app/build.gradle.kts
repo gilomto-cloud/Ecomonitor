@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.io.File
 
 plugins {
     id("com.android.application")
@@ -29,18 +30,25 @@ if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
 
+val defaultKeystore = rootProject.file("app/keystore.jks")
+val hasDefaultKeystore = defaultKeystore.exists()
+
 val releaseStoreFile = System.getenv("ECO_STORE_FILE")
     ?: localProperties.getProperty("ECO_STORE_FILE")
     ?: localProperties.getProperty("RELEASE_STORE_FILE")
+    ?: if (hasDefaultKeystore) "app/keystore.jks" else null
 val releaseStorePassword = System.getenv("ECO_STORE_PASSWORD")
     ?: localProperties.getProperty("ECO_STORE_PASSWORD")
     ?: localProperties.getProperty("RELEASE_STORE_PASSWORD")
+    ?: if (hasDefaultKeystore) "android123" else null
 val releaseKeyAlias = System.getenv("ECO_KEY_ALIAS")
     ?: localProperties.getProperty("ECO_KEY_ALIAS")
     ?: localProperties.getProperty("RELEASE_KEY_ALIAS")
+    ?: if (hasDefaultKeystore) "ecomonitor" else null
 val releaseKeyPassword = System.getenv("ECO_KEY_PASSWORD")
     ?: localProperties.getProperty("ECO_KEY_PASSWORD")
     ?: localProperties.getProperty("RELEASE_KEY_PASSWORD")
+    ?: if (hasDefaultKeystore) "android123" else null
 
 val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() &&
     !releaseStorePassword.isNullOrBlank() &&
@@ -51,7 +59,7 @@ android {
     namespace = "com.river2.monitor"
     compileSdk = 37
 
-    if (hasReleaseSigning) {
+    if (hasReleaseSigning && releaseStoreFile != null) {
         signingConfigs {
             create("release") {
                 storeFile = rootProject.file(releaseStoreFile)
@@ -122,4 +130,41 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.junit)
+}
+
+tasks.register("generateKeystore") {
+    group = "signing"
+    description = "Generates release keystore app/keystore.jks if missing"
+    val keystoreFile = layout.projectDirectory.file("app/keystore.jks")
+    outputs.file(keystoreFile)
+    doLast {
+        val file = keystoreFile.asFile
+        if (!file.exists()) {
+            file.parentFile.mkdirs()
+            val javaHome = System.getProperty("java.home")
+            val keytoolPath = File(javaHome, "bin/keytool.exe").takeIf { it.exists() }
+                ?: File(javaHome, "bin/keytool").takeIf { it.exists() }
+                ?: File("keytool")
+
+            val process = ProcessBuilder(
+                keytoolPath.absolutePath,
+                "-genkey", "-v",
+                "-keystore", file.absolutePath,
+                "-keyalg", "RSA",
+                "-keysize", "2048",
+                "-validity", "10000",
+                "-alias", "ecomonitor",
+                "-storepass", "android123",
+                "-keypass", "android123",
+                "-dname", "CN=EcoMonitor, OU=Development, O=River2, C=US"
+            ).inheritIO().start()
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                throw RuntimeException("keytool failed with exit code $exitCode")
+            }
+            println("Generated keystore at ${file.absolutePath}")
+        } else {
+            println("Keystore already exists at ${file.absolutePath}")
+        }
+    }
 }
