@@ -19,6 +19,3 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 paho-mqtt = { group = "org.eclipse.paho", name = "org.eclipse.paho.client.mqttv3", version.ref = "pahoMqtt" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-
-[plugins]
-compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version = "2.4.21" }
