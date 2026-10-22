@@ -159,6 +159,8 @@ val generateKeystoreTask = tasks.register("generateKeystore") {
     }
 }
 
-tasks.named("preBuild") {
-    dependsOn(generateKeystoreTask)
+if (System.getenv("ECO_STORE_FILE").isNullOrBlank()) {
+    tasks.named("preBuild") {
+        dependsOn(generateKeystoreTask)
+    }
 }
