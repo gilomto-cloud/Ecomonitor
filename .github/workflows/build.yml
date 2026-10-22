@@ -36,7 +36,7 @@ jobs:
         run: |
           STRIPPED_SECRET=$(echo "$ECO_STORE_BASE64" | tr -d '[:space:]')
           if [ -z "$STRIPPED_SECRET" ]; then
-            echo "::error::ECO_STORE_BASE64 is required to sign release APKs with a persistent key."
+            echo "::error::ECO_STORE_BASE64 is empty. Local app/keystore.jks is gitignored and is not available to GitHub Actions; add or update ECO_STORE_BASE64 under this repository's Settings > Secrets and variables > Actions."
             exit 1
           fi
 

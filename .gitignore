@@ -3,7 +3,9 @@
 **/build/
 local.properties
 *.jks
+*.jks.*
 *.keystore
+*.keystore.*
 *.p12
 .idea/
 *.iml
