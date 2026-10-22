@@ -51,6 +51,11 @@ jobs:
             exit 1
           fi
 
+          if ! keytool -list -keystore app/keystore.jks -storepass "$ECO_STORE_PASSWORD" -alias "$ECO_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore could not be opened with ECO_STORE_PASSWORD and ECO_KEY_ALIAS. Check that these secrets match ECO_STORE_BASE64."
+            exit 1
+          fi
+
       - name: Determine Automated SemVer & Version Code
         id: versioning
         run: |
@@ -59,7 +64,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           else
-            TAG_NAME=$(git describe --tags --abbrev=0 2>/devnull || echo "v1.2.0")
+            TAG_NAME=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.0")
           fi
 
           SEMVER="${TAG_NAME#v}"
@@ -87,9 +92,27 @@ jobs:
         env:
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
+          ECO_STORE_FILE: app/keystore.jks
           ECO_STORE_PASSWORD: ${{ secrets.ECO_STORE_PASSWORD }}
           ECO_KEY_ALIAS: ${{ secrets.ECO_KEY_ALIAS }}
           ECO_KEY_PASSWORD: ${{ secrets.ECO_KEY_PASSWORD }}
+
+      - name: Verify release APK signature
+        run: |
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}."
+            exit 1
+          fi
+
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [ -z "$apksigner" ]; then
+            echo "::error::Could not find Android apksigner in $ANDROID_HOME/build-tools."
+            exit 1
+          fi
+
+          "$apksigner" verify --verbose --print-certs "${apks[0]}"
 
       - uses: actions/upload-artifact@v4
         with:
