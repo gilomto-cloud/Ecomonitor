@@ -30,28 +30,26 @@ jobs:
       - name: Prepare signing keystore
         env:
           ECO_STORE_BASE64: ${{ secrets.ECO_STORE_BASE64 }}
+          ECO_STORE_PASSWORD: ${{ secrets.ECO_STORE_PASSWORD }}
+          ECO_KEY_ALIAS: ${{ secrets.ECO_KEY_ALIAS }}
+          ECO_KEY_PASSWORD: ${{ secrets.ECO_KEY_PASSWORD }}
         run: |
           STRIPPED_SECRET=$(echo "$ECO_STORE_BASE64" | tr -d '[:space:]')
-          if [ -n "$STRIPPED_SECRET" ]; then
-            echo "Decoding release keystore from ECO_STORE_BASE64 secret..."
-            if echo "$STRIPPED_SECRET" | base64 -d > app/keystore.jks 2>/dev/null || echo "$STRIPPED_SECRET" | base64 --decode > app/keystore.jks 2>/dev/null; then
-              if [ -s app/keystore.jks ]; then
-                echo "Successfully decoded release keystore from ECO_STORE_BASE64 secret."
-              else
-                echo "Decoded keystore file is empty. Removing invalid file and generating default keystore..."
-                rm -f app/keystore.jks
-                ./gradlew generateKeystore
-              fi
-            else
-              echo "Base64 decoding failed. Removing invalid file and generating default keystore..."
-              rm -f app/keystore.jks
-              ./gradlew generateKeystore
-            fi
-          else
-            echo "No ECO_STORE_BASE64 secret provided. Generating default release keystore..."
-            ./gradlew generateKeystore
+          if [ -z "$STRIPPED_SECRET" ]; then
+            echo "::error::ECO_STORE_BASE64 is required to sign release APKs with a persistent key."
+            exit 1
           fi
-          ls -l app/keystore.jks
+
+          if [ -z "$ECO_STORE_PASSWORD" ] || [ -z "$ECO_KEY_ALIAS" ] || [ -z "$ECO_KEY_PASSWORD" ]; then
+            echo "::error::ECO_STORE_PASSWORD, ECO_KEY_ALIAS, and ECO_KEY_PASSWORD are required for release signing."
+            exit 1
+          fi
+
+          if ! printf '%s' "$STRIPPED_SECRET" | base64 --decode > app/keystore.jks 2>/dev/null || [ ! -s app/keystore.jks ]; then
+            rm -f app/keystore.jks
+            echo "::error::ECO_STORE_BASE64 did not decode to a valid non-empty keystore file."
+            exit 1
+          fi
 
       - name: Determine Automated SemVer & Version Code
         id: versioning
@@ -89,6 +87,9 @@ jobs:
         env:
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
+          ECO_STORE_PASSWORD: ${{ secrets.ECO_STORE_PASSWORD }}
+          ECO_KEY_ALIAS: ${{ secrets.ECO_KEY_ALIAS }}
+          ECO_KEY_PASSWORD: ${{ secrets.ECO_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:

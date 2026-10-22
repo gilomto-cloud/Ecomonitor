@@ -21,6 +21,11 @@ connection and alerts keep running in the background.
 ## Notes
 - Energy totals are measured by the app (power x time) while its service is running.
 
+## Release signing and upgrades
+Release APKs must be signed with the same persistent keystore to install as updates. Configure these GitHub Actions secrets before publishing releases: `ECO_STORE_BASE64` (the base64-encoded keystore), `ECO_STORE_PASSWORD`, `ECO_KEY_ALIAS`, and `ECO_KEY_PASSWORD`. The build now fails rather than silently generating a different signing key.
+
+The 2.0.2 and 2.0.3 APKs were each signed with a different temporary key, so Android cannot install 2.0.3 over 2.0.2. To move to 2.0.3, uninstall 2.0.2 first, then install 2.0.3; uninstalling removes app-local data and settings. Configure a persistent signing key for future releases to avoid repeating this.
+
 ## No data showing?
 EcoFlow's cloud only streams data for a device it considers "active", which is tied to the
 official EcoFlow app being used. Open the official EcoFlow app once, then return here: data
