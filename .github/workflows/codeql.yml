@@ -38,7 +38,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platforms;android-37
+          packages: platforms;android-37 build-tools;35.0.0
           accept-android-sdk-licenses: true
 
       - name: Configure local.properties for Android SDK
@@ -54,7 +54,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          build-mode: manual
 
       - name: Build project manually
         run: ./gradlew --no-daemon :app:assembleDebug
