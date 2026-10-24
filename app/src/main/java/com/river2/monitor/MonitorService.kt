@@ -95,6 +95,7 @@ class MonitorService : Service() {
         job?.cancel()
         session?.stop()
         session = null
+        scope.launch { Telemetry.sendPingIfNeeded(this@MonitorService, store) }
         job = scope.launch {
             try {
                 status("Logging in…", false)

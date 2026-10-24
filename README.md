@@ -26,3 +26,6 @@ EcoFlow's cloud only streams data for a device it considers "active", which is t
 official EcoFlow app being used. Open the official EcoFlow app once, then return here: data
 usually starts within seconds and keeps flowing for roughly 15 minutes after you close it.
 Also check the Raw tab > Log for connection details (tap "Copy log" to share it).
+
+## Privacy & Usage Stats
+EcoMonitor sends an anonymous active user heartbeat once per day (containing app version, device model, and a random installation UUID) to track active installs. No personal data, email, or credentials are ever sent. You can disable this anytime under **Settings > Advanced & Debug > Send Anonymous Usage Stats**.

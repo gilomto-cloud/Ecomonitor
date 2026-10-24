@@ -64,6 +64,25 @@ class Store(ctx: Context) {
     var githubRepo: String
         get() = s("githubRepo", "gilomto-cloud/EcoMonitor")
         set(v) { sp.edit().putString("githubRepo", v).apply() }
+    var telemetryUrl: String
+        get() = s("telemetryUrl", "https://ecomonitor.gilomto.workers.dev/api/ping")
+        set(v) { sp.edit().putString("telemetryUrl", v).apply() }
+    var telemetryEnabled: Boolean
+        get() = sp.getBoolean("telemetryEnabled", true)
+        set(v) { sp.edit().putBoolean("telemetryEnabled", v).apply() }
+    var installationId: String
+        get() {
+            var id = s("installationId", "")
+            if (id.isEmpty()) {
+                id = java.util.UUID.randomUUID().toString()
+                sp.edit().putString("installationId", id).apply()
+            }
+            return id
+        }
+        set(v) { sp.edit().putString("installationId", v).apply() }
+    var lastPingTime: Long
+        get() = sp.getLong("lastPingTime", 0L)
+        set(v) { sp.edit().putLong("lastPingTime", v).apply() }
     var widgetSoc: Int
         get() = i("widgetSoc", 0)
         set(v) { sp.edit().putInt("widgetSoc", v).apply() }

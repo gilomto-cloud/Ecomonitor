@@ -2062,13 +2062,14 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
 
         // Section 4: Advanced & Debug
         var showRaw by remember { mutableStateOf(store.showRawTab) }
+        var telemetryEnabled by remember { mutableStateOf(store.telemetryEnabled) }
         Card(
             Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("ADVANCED & DEBUG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
 
                 Row(
@@ -2083,6 +2084,21 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
                     Switch(
                         checked = showRaw,
                         onCheckedChange = { showRaw = it; savedMessage = false }
+                    )
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Send Anonymous Usage Stats", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Helps track active installs anonymously (no personal data)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = telemetryEnabled,
+                        onCheckedChange = { telemetryEnabled = it; savedMessage = false }
                     )
                 }
             }
@@ -2100,6 +2116,7 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
                 store.highTemp = temp.toIntOrNull() ?: 45
                 store.overloadW = over.toIntOrNull() ?: 700
                 store.showRawTab = showRaw
+                store.telemetryEnabled = telemetryEnabled
                 savedMessage = true
             },
             shape = RoundedCornerShape(12.dp),
