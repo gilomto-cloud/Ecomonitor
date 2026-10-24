@@ -1,6 +1,7 @@
 package com.river2.monitor
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -676,9 +677,9 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     val ui by Repo.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     val ctx = LocalContext.current
+    var availableUpdate by remember { mutableStateOf<ReleaseInfo?>(null) }
     LaunchedEffect(store.githubRepo) {
-        val um = UpdateManager(ctx, store.githubRepo)
-        um.checkForUpdates()
+        availableUpdate = UpdateManager(ctx, store.githubRepo).checkForUpdates()
     }
 
     val showRaw = store.showRawTab
@@ -693,6 +694,29 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
     }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    availableUpdate?.let { release ->
+        AlertDialog(
+            onDismissRequest = { availableUpdate = null },
+            title = { Text("Update available: ${release.tagName}", fontWeight = FontWeight.Bold) },
+            text = { Text("A newer version of EcoMonitor is available on GitHub.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    availableUpdate = null
+                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)))
+                }) {
+                    Text("View release")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { availableUpdate = null }) {
+                    Text("Later")
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+        )
+    }
 
     if (showLogoutDialog) {
         AlertDialog(

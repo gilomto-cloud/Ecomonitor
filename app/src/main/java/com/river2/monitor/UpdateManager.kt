@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -85,12 +86,17 @@ class UpdateManager(
                 resp.code to resp.body.string()
             }
             if (code != 200 || body.isEmpty()) {
+                Log.w("UpdateManager", "GitHub release check failed with HTTP $code")
                 return@withContext null
             }
 
             val json = JSONObject(body)
             val tagName = json.optString("tag_name", "")
             val versionName = tagName.removePrefix("v").removePrefix("V").trim()
+            if (tagName.isBlank() || parseVersionParts(versionName).isEmpty()) {
+                Log.w("UpdateManager", "GitHub returned a release without a valid version tag")
+                return@withContext null
+            }
             val releaseNotes = json.optString("body", "No release notes provided.")
             val htmlUrl = json.optString("html_url", "https://github.com/$repo/releases")
 
@@ -106,9 +112,12 @@ class UpdateManager(
 
             if (isNewer) {
                 postUpdateNotification(release)
+                release
+            } else {
+                null
             }
-            release
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w("UpdateManager", "Unable to check GitHub for app updates", e)
             null
         }
     }
