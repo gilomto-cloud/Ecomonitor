@@ -31,6 +31,8 @@ object Telemetry {
 
             val payload = JSONObject().apply {
                 put("installation_id", store.installationId)
+                put("version", appVersion)
+                put("model", Build.MODEL)
                 put("app_version", appVersion)
                 put("android_version", Build.VERSION.RELEASE)
                 put("sdk_version", Build.VERSION.SDK_INT)
