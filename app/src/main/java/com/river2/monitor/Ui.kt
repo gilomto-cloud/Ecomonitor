@@ -780,7 +780,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                                     }
                                 }
                             }
-                            Text(ui.status, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            Text(ui.status, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                         }
                     }
                 },

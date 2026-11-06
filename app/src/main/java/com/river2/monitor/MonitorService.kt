@@ -105,10 +105,12 @@ class MonitorService : Service() {
         job = scope.launch {
             var retryDelay = 2.seconds
             while (isActive) {
+                var connectionStage = "EcoFlow login"
                 try {
                     status("Logging in…", false)
                     val cert = EcoFlowApi.login(store.email, store.password, store.region)
                     log("Login OK (userId ${cert.uid}), broker ${cert.url}:${cert.port}")
+                    connectionStage = "MQTT connection"
                     val s = MqttSession(cert, store.sn, ::onRaw, ::status, ::log)
                     session = s
                     val began = System.currentTimeMillis()
@@ -131,13 +133,13 @@ class MonitorService : Service() {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    status("⚠ ${e.message ?: e.javaClass.simpleName}", false)
-                    log("Connection failed: ${e.message ?: e.javaClass.simpleName}")
+                    val reason = e.message ?: e.javaClass.simpleName
+                    status("⚠ $connectionStage failed: $reason. Retrying in ${retryDelay.inWholeSeconds}s.", false)
+                    log("$connectionStage failed: $reason")
                     session?.stop()
                     session = null
                 }
                 if (isActive) {
-                    status("Connection lost; retrying…", false)
                     delay(retryDelay)
                     retryDelay = (retryDelay * 2).coerceAtMost(60.seconds)
                 }

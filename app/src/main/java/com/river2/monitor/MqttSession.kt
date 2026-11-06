@@ -66,8 +66,13 @@ class MqttSession(
 
             override fun connectionLost(cause: Throwable?) {
                 connected = false
-                onLog("MQTT connection lost: ${cause?.message}")
-                onStatus("Connection lost — reconnecting…", false)
+                val reason = cause?.message?.takeIf { it.isNotBlank() }
+                onLog("MQTT connection lost: ${reason ?: cause?.javaClass?.simpleName ?: "unknown reason"}")
+                onStatus(
+                    if (reason != null) "MQTT connection lost ($reason) — reconnecting…"
+                    else "MQTT connection lost — reconnecting…",
+                    false,
+                )
             }
 
             override fun messageArrived(t: String?, m: MqttMessage?) {
