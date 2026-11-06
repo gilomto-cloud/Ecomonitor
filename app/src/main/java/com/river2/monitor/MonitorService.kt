@@ -46,9 +46,12 @@ class MonitorService : Service() {
 
     companion object {
         private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss")
+        private const val ACTION_RECONNECT = "com.river2.monitor.RECONNECT"
 
-        fun start(ctx: Context) {
-            ContextCompat.startForegroundService(ctx, Intent(ctx, MonitorService::class.java))
+        fun start(ctx: Context, reconnect: Boolean = false) {
+            val intent = Intent(ctx, MonitorService::class.java)
+            if (reconnect) intent.action = ACTION_RECONNECT
+            ContextCompat.startForegroundService(ctx, intent)
         }
     }
 
@@ -67,6 +70,7 @@ class MonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, fl: Int, startId: Int): Int {
         if (started) {
+            if (intent?.action == ACTION_RECONNECT) connect()
             return START_STICKY
         }
         started = true
@@ -83,6 +87,8 @@ class MonitorService : Service() {
 
     override fun onDestroy() {
         started = false
+        store.widgetConnected = false
+        EcoMonitorWidgetProvider.updateAll(this)
         store.saveEnergy(energy)
         session?.stop()
         scope.cancel()
@@ -97,32 +103,46 @@ class MonitorService : Service() {
         session = null
         scope.launch { Telemetry.sendPingIfNeeded(this@MonitorService, store) }
         job = scope.launch {
-            try {
-                status("Logging in…", false)
-                val cert = EcoFlowApi.login(store.email, store.password, store.region)
-                log("Login OK (userId ${cert.uid}), broker ${cert.url}:${cert.port}")
-                val s = MqttSession(cert, store.sn, ::onRaw, ::status, ::log)
-                session = s
-                val began = System.currentTimeMillis()
-                s.start()
-                while (isActive) {
-                    delay(10_000.milliseconds)
-                    s.requestQuotas()
-                    val now = System.currentTimeMillis()
-                    val noDataThreshold = 25.seconds
-                    val staleDataThreshold = 90.seconds
-                    if (s.lastMsg == 0L && now - began > noDataThreshold.inWholeMilliseconds) {
-                        status("Connected, but the cloud sent no data yet. Open the official " +
-                            "EcoFlow app once to wake the device, then come back. " +
-                            "Check Raw > Log for details.", true)
-                    } else if (s.lastMsg > 0 && now - s.lastMsg > staleDataThreshold.inWholeMilliseconds) {
-                        status("⚠ No data for 90 s (device offline or asleep?)", false)
+            var retryDelay = 2.seconds
+            while (isActive) {
+                var connectionStage = "EcoFlow login"
+                try {
+                    status("Logging in…", false)
+                    val cert = EcoFlowApi.login(store.email, store.password, store.region)
+                    log("Login OK (userId ${cert.uid}), broker ${cert.url}:${cert.port}")
+                    connectionStage = "MQTT connection"
+                    val s = MqttSession(cert, store.sn, ::onRaw, ::status, ::log)
+                    session = s
+                    val began = System.currentTimeMillis()
+                    s.start()
+                    retryDelay = 2.seconds
+                    while (isActive) {
+                        delay(10_000.milliseconds)
+                        s.requestQuotas()
+                        val now = System.currentTimeMillis()
+                        val noDataThreshold = 25.seconds
+                        val staleDataThreshold = 90.seconds
+                        if (s.lastMsg == 0L && now - began > noDataThreshold.inWholeMilliseconds) {
+                            status("Connected, but the cloud sent no data yet. Open the official " +
+                                "EcoFlow app once to wake the device, then come back. " +
+                                "Check Raw > Log for details.", true)
+                        } else if (s.lastMsg > 0 && now - s.lastMsg > staleDataThreshold.inWholeMilliseconds) {
+                            status("⚠ No data for 90 s (device offline or asleep?)", false)
+                        }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val reason = e.message ?: e.javaClass.simpleName
+                    status("⚠ $connectionStage failed: $reason. Retrying in ${retryDelay.inWholeSeconds}s.", false)
+                    log("$connectionStage failed: $reason")
+                    session?.stop()
+                    session = null
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                status("⚠ ${e.message ?: e.javaClass.simpleName}", false)
+                if (isActive) {
+                    delay(retryDelay)
+                    retryDelay = (retryDelay * 2).coerceAtMost(60.seconds)
+                }
             }
         }
     }
@@ -140,6 +160,10 @@ class MonitorService : Service() {
 
     private fun status(msg: String, connected: Boolean) {
         Repo.state.update { it.copy(status = msg, connected = connected) }
+        if (!connected && store.widgetConnected) {
+            store.widgetConnected = false
+            EcoMonitorWidgetProvider.updateAll(this)
+        }
     }
 
     private fun send(body: JSONObject) {
@@ -243,11 +267,11 @@ class MonitorService : Service() {
         if (soc != null) {
             val dis = s.net < 0
             edge("low", 10, soc <= store.lowSoc && dis, soc > store.lowSoc + 3,
-                "Battery low", "River 2 is at ${soc.toInt()}%")
+                "Battery low", "${store.model} is at ${soc.toInt()}%")
             edge("crit", 11, soc <= store.critSoc && dis, soc > store.critSoc + 3,
-                "Battery critical", "River 2 is at ${soc.toInt()}% — plug in power!")
+                "Battery critical", "${store.model} is at ${soc.toInt()}% — plug in power!")
             edge("full", 12, soc >= store.fullSoc && s.inW > 0, soc < store.fullSoc - 3,
-                "Fully charged", "River 2 reached ${soc.toInt()}%")
+                "Fully charged", "${store.model} reached ${soc.toInt()}%")
         }
         s.temp?.let {
             edge("temp", 13, it >= store.highTemp, it < store.highTemp - 5,
@@ -262,7 +286,7 @@ class MonitorService : Service() {
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, "monitor")
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
-            .setContentTitle("River 2").setContentText(text)
+            .setContentTitle(store.model).setContentText(text)
             .setOngoing(true).setOnlyAlertOnce(true).setContentIntent(pi).build()
     }
 
@@ -277,26 +301,6 @@ class MonitorService : Service() {
         store.widgetSolar = (s.solar ?: 0.0).toInt()
         store.widgetSavedWh = savedWh
 
-        val appWidgetManager = android.appwidget.AppWidgetManager.getInstance(this)
-        val provider = android.content.ComponentName(this, EcoMonitorWidgetProvider::class.java)
-        val ids = appWidgetManager.getAppWidgetIds(provider)
-        if (ids.isNotEmpty()) {
-            val views = android.widget.RemoteViews(packageName, R.layout.widget_status)
-            views.setTextViewText(R.id.widgetTitle, if (store.widgetConnected) "LIVE" else "OFFLINE")
-            views.setTextViewText(R.id.widgetStatus, store.widgetStatus)
-            views.setTextViewText(R.id.widgetSoc, "${soc}%")
-            views.setTextViewText(R.id.widgetFlow, "In ${store.widgetInW}W • Out ${store.widgetOutW}W")
-            views.setTextViewText(R.id.widgetSolar, "Solar ${store.widgetSolar}W")
-            views.setTextViewText(R.id.widgetSaved, "Saved ${if (savedWh >= 1000) String.format(java.util.Locale.US, "%.2f kWh", savedWh / 1000.0) else String.format(java.util.Locale.US, "%.0f Wh", savedWh)}")
-            val intent = Intent(this, MainActivity::class.java)
-            val pending = PendingIntent.getActivity(
-                this,
-                0,
-                intent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            views.setOnClickPendingIntent(R.id.widgetRoot, pending)
-            appWidgetManager.updateAppWidget(ids, views)
-        }
+        EcoMonitorWidgetProvider.updateAll(this)
     }
 }

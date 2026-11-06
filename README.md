@@ -6,14 +6,14 @@
 <img width="180" height="374.375" alt="4084" src="https://github.com/user-attachments/assets/4688c99d-8cb6-4f0c-aae6-4c59e6516f3d" />
 <img width="180" height="374.375" alt="4082" src="https://github.com/user-attachments/assets/2bf3611d-d156-4891-874d-49b78520afb7" />
 
-Monitor your EcoFlow River 2 / 2 Max / 2 Pro from your phone: battery gauge, live power,
+Monitor your EcoFlow RIVER 2 / RIVER 3 and DELTA 2 / DELTA 3 series (including DELTA 3 1000 Air and 2000 Air) from your phone: battery gauge, live power,
 solar production and AC usage tracking (with cost), history chart, and alerts.
 
 It signs in with your EcoFlow **app** account and uses EcoFlow's cloud MQTT (the same
 route as the phone app). This is unofficial and EcoFlow may change it.
 
 ## First run
-Enter your EcoFlow email, password, device serial number (starts with R6...), pick the region
+Enter your EcoFlow email, password, device serial number, pick the region
 that matches your EcoFlow account, and the model. Allow notifications when asked.
 Tip: on some phones set battery usage for the app to "Unrestricted" so the live
 connection and alerts keep running in the background.

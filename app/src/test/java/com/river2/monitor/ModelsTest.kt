@@ -7,6 +7,63 @@ import org.junit.Test
 
 class ModelsTest {
     @Test
+    fun settings_validation_returns_parsed_values_for_valid_input() {
+        val result = validateSettings("0.25", "20", "10", "100", "45", "700")
+
+        assertEquals(
+            SettingsValues(0.25f, 20, 10, 100, 45, 700),
+            result.settings,
+        )
+        assertNull(result.error)
+    }
+
+    @Test
+    fun settings_validation_rejects_invalid_values_without_defaults() {
+        val invalidPrice = validateSettings("-1", "20", "10", "100", "45", "700")
+        val invalidSocOrder = validateSettings("0", "10", "20", "100", "45", "700")
+        val invalidTemperature = validateSettings("0", "20", "10", "100", "101", "700")
+        val invalidOverload = validateSettings("0", "20", "10", "100", "45", "0")
+
+        assertNull(invalidPrice.settings)
+        assertNotNull(invalidPrice.error)
+        assertNull(invalidSocOrder.settings)
+        assertNotNull(invalidSocOrder.error)
+        assertNull(invalidTemperature.settings)
+        assertNotNull(invalidTemperature.error)
+        assertNull(invalidOverload.settings)
+        assertNotNull(invalidOverload.error)
+    }
+
+    @Test
+    fun model_catalog_includes_delta_2_series_capacity_and_output_ratings() {
+        assertEquals(1024.0, MODELS.getValue("DELTA 2"), 0.0001)
+        assertEquals(2048.0, MODELS.getValue("DELTA 2 Max"), 0.0001)
+        assertEquals(1800.0, MODEL_POWER_MAX_W.getValue("DELTA 2"), 0.0001)
+        assertEquals(2400.0, MODEL_POWER_MAX_W.getValue("DELTA 2 Max"), 0.0001)
+    }
+
+    @Test
+    fun model_catalog_includes_river_3_and_delta_3_series() {
+        assertEquals(245.0, MODELS.getValue("River 3"), 0.0001)
+        assertEquals(286.0, MODELS.getValue("River 3 Plus"), 0.0001)
+        assertEquals(572.0, MODELS.getValue("River 3 Max"), 0.0001)
+        assertEquals(858.0, MODELS.getValue("River 3 Max Plus"), 0.0001)
+        assertEquals(300.0, MODEL_POWER_MAX_W.getValue("River 3"), 0.0001)
+        assertEquals(600.0, MODEL_POWER_MAX_W.getValue("River 3 Max Plus"), 0.0001)
+
+        assertEquals(1024.0, MODELS.getValue("DELTA 3 Classic"), 0.0001)
+        assertEquals(1024.0, MODELS.getValue("DELTA 3 1000 Air"), 0.0001)
+        assertEquals(2048.0, MODELS.getValue("DELTA 3 Max"), 0.0001)
+        assertEquals(2048.0, MODELS.getValue("DELTA 3 2000 Air"), 0.0001)
+        assertEquals(3072.0, MODELS.getValue("DELTA 3 Ultra Plus"), 0.0001)
+        assertEquals(1800.0, MODEL_POWER_MAX_W.getValue("DELTA 3 Classic"), 0.0001)
+        assertEquals(1800.0, MODEL_POWER_MAX_W.getValue("DELTA 3 1000 Air"), 0.0001)
+        assertEquals(3000.0, MODEL_POWER_MAX_W.getValue("DELTA 3 Max Plus"), 0.0001)
+        assertEquals(2400.0, MODEL_POWER_MAX_W.getValue("DELTA 3 2000 Air"), 0.0001)
+        assertEquals(3600.0, MODEL_POWER_MAX_W.getValue("DELTA 3 Ultra"), 0.0001)
+    }
+
+    @Test
     fun summarize_uses_device_values_and_handles_missing_data() {
         val result = summarize(
             mapOf(

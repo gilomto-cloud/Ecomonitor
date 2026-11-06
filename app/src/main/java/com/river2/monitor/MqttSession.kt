@@ -66,8 +66,13 @@ class MqttSession(
 
             override fun connectionLost(cause: Throwable?) {
                 connected = false
-                onLog("MQTT connection lost: ${cause?.message}")
-                onStatus("Connection lost — reconnecting…", false)
+                val reason = cause?.message?.takeIf { it.isNotBlank() }
+                onLog("MQTT connection lost: ${reason ?: cause?.javaClass?.simpleName ?: "unknown reason"}")
+                onStatus(
+                    if (reason != null) "MQTT connection lost ($reason) — reconnecting…"
+                    else "MQTT connection lost — reconnecting…",
+                    false,
+                )
             }
 
             override fun messageArrived(t: String?, m: MqttMessage?) {
@@ -87,7 +92,7 @@ class MqttSession(
     private fun handle(topicName: String?, text: String) {
         val m = try { JSONObject(text) } catch (_: Exception) { return }
 
-        if ((topicName != null) && (topicName.endsWith("/set_reply") || topicName.contains("/thing/property/"))) {
+        if (topicName?.endsWith("/set_reply") == true) {
             val code = m.optString("code", "")
             val msg = m.optString("message", "")
             if ((code == "0") || (code == "200")) {

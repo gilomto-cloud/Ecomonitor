@@ -12,6 +12,16 @@ import androidx.core.graphics.toColorInt
 class EcoMonitorWidgetProvider : AppWidgetProvider() {
     companion object {
 
+        fun updateAll(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val component = ComponentName(context, EcoMonitorWidgetProvider::class.java)
+            EcoMonitorWidgetProvider().onUpdate(
+                context,
+                manager,
+                manager.getAppWidgetIds(component),
+            )
+        }
+
         private fun statusColor(status: String, connected: Boolean): Int {
             if (!connected) return "#94A3B8".toColorInt()
             return when {

@@ -11,9 +11,10 @@ import java.time.LocalDate
 /** Credentials and settings are stored encrypted on the device. */
 @Suppress("DEPRECATION")
 class Store(ctx: Context) {
+    private val appContext = ctx.applicationContext
     private val sp: SharedPreferences = EncryptedSharedPreferences.create(
-        ctx, "river2_secure",
-        MasterKey.Builder(ctx).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+        appContext, "river2_secure",
+        MasterKey.Builder(appContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )

@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /**
  * Best-effort control payloads (moduleType / operateType / params layout).
- * Formats differ between River 2 firmware versions — if a command is rejected,
+ * Formats differ between device firmware versions — if a command is rejected,
  * adjust the entries below.
  */
 data class Cmd(

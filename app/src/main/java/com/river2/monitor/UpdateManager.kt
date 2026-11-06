@@ -52,10 +52,9 @@ class UpdateManager(
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val resolved = intent.resolveActivity(context.packageManager) ?: return
-            intent.component = resolved
+            if (intent.resolveActivity(context.packageManager) == null) return
             val pendingIntent = PendingIntent.getActivity(
-                context,
+                context.applicationContext,
                 0,
                 intent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

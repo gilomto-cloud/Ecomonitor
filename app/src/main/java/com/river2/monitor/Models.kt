@@ -6,7 +6,101 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 
-val MODELS: Map<String, Double> = mapOf("River 2" to 256.0, "River 2 Max" to 512.0, "River 2 Pro" to 768.0)
+val MODELS: Map<String, Double> = mapOf(
+    "River 2" to 256.0,
+    "River 2 Max" to 512.0,
+    "River 2 Pro" to 768.0,
+    "River 3" to 245.0,
+    "River 3 Plus" to 286.0,
+    "River 3 Max" to 572.0,
+    "River 3 Max Plus" to 858.0,
+    "DELTA 2" to 1024.0,
+    "DELTA 2 Max" to 2048.0,
+    "DELTA 3" to 1024.0,
+    "DELTA 3 Plus" to 1024.0,
+    "DELTA 3 Classic" to 1024.0,
+    "DELTA 3 1000 Air" to 1024.0,
+    "DELTA 3 Max" to 2048.0,
+    "DELTA 3 Max Plus" to 2048.0,
+    "DELTA 3 2000 Air" to 2048.0,
+    "DELTA 3 Ultra" to 3072.0,
+    "DELTA 3 Ultra Plus" to 3072.0,
+)
+
+val MODEL_POWER_MAX_W: Map<String, Double> = mapOf(
+    "River 2" to 300.0,
+    "River 2 Max" to 500.0,
+    "River 2 Pro" to 800.0,
+    "River 3" to 300.0,
+    "River 3 Plus" to 600.0,
+    "River 3 Max" to 600.0,
+    "River 3 Max Plus" to 600.0,
+    "DELTA 2" to 1800.0,
+    "DELTA 2 Max" to 2400.0,
+    "DELTA 3" to 1800.0,
+    "DELTA 3 Plus" to 1800.0,
+    "DELTA 3 Classic" to 1800.0,
+    "DELTA 3 1000 Air" to 1800.0,
+    "DELTA 3 Max" to 2400.0,
+    "DELTA 3 Max Plus" to 3000.0,
+    "DELTA 3 2000 Air" to 2400.0,
+    "DELTA 3 Ultra" to 3600.0,
+    "DELTA 3 Ultra Plus" to 3600.0,
+)
+
+data class SettingsValues(
+    val price: Float,
+    val lowSoc: Int,
+    val critSoc: Int,
+    val fullSoc: Int,
+    val highTemp: Int,
+    val overloadW: Int,
+)
+
+data class SettingsValidation(
+    val settings: SettingsValues?,
+    val error: String?,
+)
+
+fun validateSettings(
+    price: String,
+    lowSoc: String,
+    critSoc: String,
+    fullSoc: String,
+    highTemp: String,
+    overloadW: String,
+): SettingsValidation {
+    fun invalid(message: String) = SettingsValidation(null, message)
+
+    val parsedPrice = if (price.isBlank()) 0f else price.toFloatOrNull()
+        ?: return invalid("Enter a valid electricity price.")
+    if ((!parsedPrice.isFinite()) || (parsedPrice < 0f)) {
+        return invalid("Electricity price must be a non-negative finite number.")
+    }
+
+    val low = lowSoc.toIntOrNull() ?: return invalid("Enter a whole-number low battery threshold.")
+    val critical = critSoc.toIntOrNull() ?: return invalid("Enter a whole-number critical threshold.")
+    val full = fullSoc.toIntOrNull() ?: return invalid("Enter a whole-number full-charge threshold.")
+    val temperature = highTemp.toIntOrNull() ?: return invalid("Enter a whole-number temperature threshold.")
+    val overload = overloadW.toIntOrNull() ?: return invalid("Enter a whole-number overload threshold.")
+
+    if (low !in 0..100 || critical !in 0..100 || full !in 0..100 ||
+        critical > low || low >= full
+    ) {
+        return invalid("Battery thresholds must satisfy 0–100% and critical ≤ low < full.")
+    }
+    if (temperature !in 1..100) {
+        return invalid("High temperature threshold must be between 1°C and 100°C.")
+    }
+    if (overload !in 1..100_000) {
+        return invalid("Overload threshold must be between 1 W and 100,000 W.")
+    }
+
+    return SettingsValidation(
+        SettingsValues(parsedPrice, low, critical, full, temperature, overload),
+        null,
+    )
+}
 
 val KEYS: Map<String, List<String>> = mapOf(
     "soc" to listOf("bms_emsStatus.lcdShowSoc", "pd.soc", "bms_bmsStatus.soc"),
