@@ -87,7 +87,7 @@ class MqttSession(
     private fun handle(topicName: String?, text: String) {
         val m = try { JSONObject(text) } catch (_: Exception) { return }
 
-        if ((topicName != null) && (topicName.endsWith("/set_reply") || topicName.contains("/thing/property/"))) {
+        if (topicName?.endsWith("/set_reply") == true) {
             val code = m.optString("code", "")
             val msg = m.optString("message", "")
             if ((code == "0") || (code == "200")) {

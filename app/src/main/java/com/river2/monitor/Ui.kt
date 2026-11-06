@@ -3,6 +3,8 @@ package com.river2.monitor
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -72,10 +74,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -95,6 +99,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.YearMonth
@@ -254,7 +259,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "Sign in with your EcoFlow account to connect directly to your River 2 power station telemetry.",
+                            "Sign in with your EcoFlow account to connect directly to your power station telemetry.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 20.sp
@@ -416,7 +421,7 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        "Find your Serial Number on the barcode sticker located on the bottom/back of your River 2 station, or in the EcoFlow app under Device Settings -> Info.",
+                                        "Find your Serial Number on the barcode sticker located on your station, or in the EcoFlow app under Device Settings -> Info.",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         lineHeight = 16.sp
@@ -507,22 +512,16 @@ fun LoginScreen(store: Store, onDone: () -> Unit) {
                             letterSpacing = 1.sp
                         )
 
-                        val capacities = mapOf(
-                            "River 2" to "256 Wh",
-                            "River 2 Max" to "512 Wh",
-                            "River 2 Pro" to "768 Wh"
-                        )
-
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             MODELS.keys.forEach { m ->
                                 val selected = model == m
-                                val capacity = capacities[m] ?: ""
+                                val capacity = MODELS[m]?.let { "${it.toInt()} Wh" } ?: ""
                                 Surface(
                                     modifier = Modifier
-                                        .weight(1f)
+                                        .width(112.dp)
                                         .clip(RoundedCornerShape(14.dp))
                                         .clickable { model = m },
                                     shape = RoundedCornerShape(14.dp),
@@ -787,7 +786,7 @@ fun MainScreen(store: Store, onLogout: () -> Unit) {
                 },
                 actions = {
                     Surface(
-                        onClick = { MonitorService.start(ctx) },
+                        onClick = { MonitorService.start(ctx, reconnect = true) },
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.size(36.dp),
@@ -1003,6 +1002,8 @@ fun Dashboard(
             }
         }
 
+        EnergyFlow(s, ui.connected)
+
         // Hero Savings Card (Feature Highlight)
         Card(
             Modifier.fillMaxWidth(),
@@ -1089,6 +1090,248 @@ fun Dashboard(
             MetricTile("PACK V / A", "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}", Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun EnergyFlow(s: Summary?, connected: Boolean) {
+    val solarW = s?.solar ?: 0.0
+    val acInW = s?.acIn ?: 0.0
+    val acOutW = s?.acOut ?: 0.0
+    val usbW = s?.usb ?: 0.0
+    val dcW = s?.car ?: 0.0
+    val soc = s?.soc
+    val isLive = connected && s != null
+    val hasActiveFlow = isLive && (solarW > 1.0 || acInW > 1.0 || acOutW > 1.0 || usbW > 1.0 || dcW > 1.0)
+    val flowProgressState = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(hasActiveFlow) {
+        if (!hasActiveFlow) {
+            flowProgressState.floatValue = 0f
+            return@LaunchedEffect
+        }
+        while (true) {
+            withFrameNanos { frameTimeNanos ->
+                flowProgressState.floatValue =
+                    (frameTimeNanos % 1_800_000_000L).toFloat() / 1_800_000_000f
+            }
+        }
+    }
+    val animatedSoc by animateFloatAsState(
+        targetValue = ((soc ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 700),
+        label = "battery-level",
+    )
+    val trackColor = MaterialTheme.colorScheme.outlineVariant
+    val batteryColor = when {
+        soc == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        soc <= 15 -> CRIMSON
+        soc <= 30 -> AMBER
+        else -> EMERALD
+    }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "ENERGY FLOW",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.sp,
+                )
+                Text(
+                    if (isLive) "● LIVE" else "○ WAITING FOR DATA",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isLive) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Box(Modifier.fillMaxWidth().height(210.dp)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val flowProgress = flowProgressState.floatValue
+                    val leftX = size.width * 0.294f
+                    val centerLeftX = size.width * 0.326f
+                    val centerRightX = size.width * 0.674f
+                    val rightX = size.width * 0.706f
+                    val sourceYs = listOf(0.34f, 0.66f)
+                    val outputYs = listOf(0.24f, 0.50f, 0.76f)
+
+                    fun drawFlow(
+                        start: Offset,
+                        end: Offset,
+                        color: Color,
+                        active: Boolean,
+                        phase: Float,
+                    ) {
+                        val control = Offset((start.x + end.x) / 2f, (start.y + end.y) / 2f)
+                        val path = Path().apply {
+                            moveTo(start.x, start.y)
+                            quadraticTo(control.x, control.y, end.x, end.y)
+                        }
+                        drawPath(
+                            path,
+                            color = trackColor.copy(alpha = 0.7f),
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                        if (!active) return
+
+                        drawPath(
+                            path,
+                            color = color.copy(alpha = 0.5f),
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                        repeat(3) { index ->
+                            val t = (phase + index / 3f) % 1f
+                            val inverse = 1f - t
+                            val point = Offset(
+                                inverse * inverse * start.x + 2f * inverse * t * control.x + t * t * end.x,
+                                inverse * inverse * start.y + 2f * inverse * t * control.y + t * t * end.y,
+                            )
+                            drawCircle(color, radius = 2.4.dp.toPx(), center = point)
+                        }
+                    }
+
+                    sourceYs.forEachIndexed { index, y ->
+                        val watts = if (index == 0) solarW else acInW
+                        drawFlow(
+                            Offset(leftX, size.height * y),
+                            Offset(centerLeftX, size.height * 0.5f),
+                            if (index == 0) AMBER else INDIGO,
+                            isLive && watts > 1.0,
+                            flowProgress,
+                        )
+                    }
+                    outputYs.forEachIndexed { index, y ->
+                        val watts = when (index) {
+                            0 -> acOutW
+                            1 -> usbW
+                            else -> dcW
+                        }
+                        drawFlow(
+                            Offset(centerRightX, size.height * 0.5f),
+                            Offset(rightX, size.height * y),
+                            when (index) {
+                                0 -> ORANGE
+                                1 -> CYAN
+                                else -> EMERALD
+                            },
+                            isLive && watts > 1.0,
+                            flowProgress,
+                        )
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        EnergyFlowNode("☀", "SOLAR", fmt(s?.solar, " W"), AMBER)
+                        EnergyFlowNode("⚡", "AC IN", fmt(s?.acIn, " W"), INDIGO)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Surface(
+                        Modifier.weight(1.2f),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
+                        border = BorderStroke(1.dp, batteryColor.copy(alpha = 0.55f)),
+                    ) {
+                        Column(
+                            Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Text("🔋", fontSize = 24.sp)
+                            Text(
+                                "POWER STATION",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            Text(
+                                fmt(soc, "%"),
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = batteryColor,
+                            )
+                            LinearProgressIndicator(
+                                progress = { animatedSoc },
+                                modifier = Modifier.fillMaxWidth(0.82f).height(5.dp).clip(CircleShape),
+                                color = batteryColor,
+                                trackColor = trackColor,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        EnergyFlowNode("▣", "AC OUT", fmt(s?.acOut, " W"), ORANGE)
+                        EnergyFlowNode("⌁", "USB", fmt(s?.usb, " W"), CYAN)
+                        EnergyFlowNode("⚡", "12V DC", fmt(s?.car, " W"), EMERALD)
+                    }
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("IN  ${fmt(s?.inW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CYAN)
+                Text("OUT  ${fmt(s?.outW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ORANGE)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnergyFlowNode(icon: String, label: String, value: String, color: Color) {
+    Surface(
+        Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(13.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+    ) {
+        Column(
+            Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(icon, fontSize = 11.sp, color = color)
+                Text(
+                    label,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            Text(
+                value,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = color,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -1979,6 +2222,7 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
     var over by remember { mutableStateOf(store.overloadW.toString()) }
     val num = KeyboardOptions(keyboardType = KeyboardType.Number)
     var savedMessage by remember { mutableStateOf(false) }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
 
     @Composable
     fun field(label: String, v: String, set: (String) -> Unit, kb: KeyboardOptions = num) =
@@ -2052,7 +2296,10 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
                 Text("DEVICE & PRICING", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 0.5.sp)
 
                 Text("Device Model", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     MODELS.keys.forEach { m ->
                         FilterChip(
                             selected = model == m, onClick = { model = m }, label = { Text(m, fontSize = 11.sp) },
@@ -2131,22 +2378,34 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
         // Save Button & Confirmation Banner
         Button(
             onClick = {
-                store.model = model
-                store.price = price.toFloatOrNull() ?: 0f
-                store.currency = cur
-                store.lowSoc = low.toIntOrNull() ?: 20
-                store.critSoc = crit.toIntOrNull() ?: 10
-                store.fullSoc = full.toIntOrNull() ?: 100
-                store.highTemp = temp.toIntOrNull() ?: 45
-                store.overloadW = over.toIntOrNull() ?: 700
-                store.showRawTab = showRaw
-                store.telemetryEnabled = telemetryEnabled
-                savedMessage = true
+                val validation = validateSettings(price, low, crit, full, temp, over)
+                val values = validation.settings
+                if (values == null) {
+                    validationMessage = validation.error
+                    savedMessage = false
+                } else {
+                    store.model = model
+                    store.price = values.price
+                    store.currency = cur
+                    store.lowSoc = values.lowSoc
+                    store.critSoc = values.critSoc
+                    store.fullSoc = values.fullSoc
+                    store.highTemp = values.highTemp
+                    store.overloadW = values.overloadW
+                    store.showRawTab = showRaw
+                    store.telemetryEnabled = telemetryEnabled
+                    validationMessage = null
+                    savedMessage = true
+                }
             },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
             Text("Save Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+
+        validationMessage?.let { message ->
+            Text(message, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
         }
 
         if (savedMessage) {
@@ -2181,7 +2440,7 @@ fun SettingsScreen(store: Store, onLogout: (() -> Unit)? = null) {
 
 private fun modelPowerMax(model: String?): Double {
     val normalizedModel = model?.trim()?.takeIf { it.isNotEmpty() } ?: "River 2"
-    return MODELS[normalizedModel] ?: MODELS.values.maxOrNull() ?: 256.0
+    return MODEL_POWER_MAX_W[normalizedModel] ?: MODEL_POWER_MAX_W.values.maxOrNull() ?: 300.0
 }
 
 private fun historyPowerScaleMax(model: String?, values: List<Double>): Double {

@@ -27,7 +27,7 @@ object EcoFlowApi {
             .header("lang", "en-us").header("platform", "android")
             .header("sysversion", "11").header("version", "4.1.2.02")
             .header("phonemodel", "SM-X200").header("user-agent", "okhttp/3.14.9")
-        if (token != null) b.header("Authorization", "Bearer $token")
+        if (token != null) b.header("Authorization", token)
         return b
     }
 
