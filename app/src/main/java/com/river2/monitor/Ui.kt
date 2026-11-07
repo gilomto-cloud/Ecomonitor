@@ -931,82 +931,6 @@ fun SectionHeader(title: String) {
 
 // ===================================================================== dashboard
 @Composable
-fun Gauge(s: Summary?) {
-    val soc = s?.soc
-    val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val activeColor = when {
-        soc == null -> Color.Gray
-        soc <= 15 -> CRIMSON
-        soc <= 30 -> AMBER
-        else -> EMERALD
-    }
-    val (label, mins) = s?.eta() ?: ("Idle" to null)
-    val net = s?.net ?: 0.0
-
-    Box(Modifier.size(240.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(18.dp)) {
-            val strokeWidth = 26f
-            val st = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            // Background track arc
-            drawArc(trackColor, 135f, 270f, useCenter = false, style = st)
-            // Active gauge arc
-            soc?.let {
-                val safeSoc = it.toFloat().coerceIn(0f, 100f)
-                drawArc(activeColor, 135f, 270f * (safeSoc / 100f), useCenter = false, style = st)
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (net > 2) {
-                    Text("⚡ ", fontSize = 28.sp, color = EMERALD)
-                }
-                Text(
-                    fmt(soc, "%"),
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text(
-                "BATTERY LEVEL",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 1.sp
-            )
-            Spacer(Modifier.height(8.dp))
-
-            // Time Remaining Pill Badge
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Text(
-                    if (mins == null) label else "${fmtMin(mins)} $label",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
-
-            // Power Flow Net Status
-            if ((s != null) && (kotlin.math.abs(net) >= 3)) {
-                Spacer(Modifier.height(6.dp))
-                val isCharging = net > 0
-                Text(
-                    text = if (isCharging) "▲ Charging +${net.toInt()} W" else "▼ Discharging ${net.toInt()} W",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isCharging) EMERALD else ORANGE
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun Dashboard(
     ui: UiState,
     store: Store,
@@ -1026,7 +950,7 @@ fun Dashboard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Hero Battery Gauge Card
+        // Combined battery and energy flow card
         Card(
             Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -1049,11 +973,9 @@ fun Dashboard(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                Gauge(s)
+                EnergyFlow(s, ui.connected)
             }
         }
-
-        EnergyFlow(s, ui.connected)
 
         // Hero Savings Card (Feature Highlight)
         Card(
@@ -1152,6 +1074,9 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
     val usbW = s?.usb ?: 0.0
     val dcW = s?.car ?: 0.0
     val soc = s?.soc
+    val (etaLabel, etaMinutes) = s?.eta() ?: ("Idle" to null)
+    val etaText = if (etaMinutes == null) etaLabel else "${fmtMin(etaMinutes)} $etaLabel"
+    val netW = s?.net ?: 0.0
     val isLive = connected && s != null
     val hasActiveFlow = isLive && (solarW > 1.0 || acInW > 1.0 || acOutW > 1.0 || usbW > 1.0 || dcW > 1.0)
     val flowProgressState = remember { mutableFloatStateOf(0f) }
@@ -1180,13 +1105,7 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
         else -> EMERALD
     }
 
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(Modifier.padding(14.dp)) {
+    Column(Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1320,12 +1239,28 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
                                 fontWeight = FontWeight.ExtraBold,
                                 color = batteryColor,
                             )
+                            Text(
+                                etaText,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
                             LinearProgressIndicator(
                                 progress = { animatedSoc },
                                 modifier = Modifier.fillMaxWidth(0.82f).height(5.dp).clip(CircleShape),
                                 color = batteryColor,
                                 trackColor = trackColor,
                             )
+                            if (kotlin.math.abs(netW) >= 3) {
+                                Text(
+                                    text = if (netW > 0) "▲ +${netW.toInt()} W" else "▼ ${netW.toInt()} W",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (netW > 0) EMERALD else ORANGE,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.width(10.dp))
@@ -1348,7 +1283,6 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
                 Text("IN  ${fmt(s?.inW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CYAN)
                 Text("OUT  ${fmt(s?.outW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ORANGE)
             }
-        }
     }
 }
 
