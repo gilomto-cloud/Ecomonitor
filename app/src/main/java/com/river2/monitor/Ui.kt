@@ -1,8 +1,10 @@
 package com.river2.monitor
 
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -32,6 +34,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Check
@@ -45,6 +52,15 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Power
+import androidx.compose.material.icons.rounded.Usb
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,7 +95,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,11 +104,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -111,7 +135,9 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
 
 // Tech Giant Premium Color Palette
@@ -918,15 +944,44 @@ fun MetricTile(
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        title.uppercase(Locale.US),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        letterSpacing = 1.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
-    )
+private fun DashboardSection(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onToggle)
+                .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title.uppercase(Locale.US),
+                modifier = Modifier.weight(1f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp,
+            )
+            Icon(
+                imageVector = Icons.Rounded.ExpandMore,
+                contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+                modifier = Modifier.graphicsLayer {
+                    rotationZ = if (expanded) 180f else 0f
+                },
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                content()
+            }
+        }
+    }
 }
 
 // ===================================================================== dashboard
@@ -942,6 +997,9 @@ fun Dashboard(
 
     val savedTodayStr = if (price > 0) "${money(e.todaySolar)} (${fmtWh(e.todaySolar)})" else fmtWh(e.todaySolar)
     val totalSavedStr = if (price > 0) "${money(e.totalSolar)} (${fmtWh(e.totalSolar)})" else fmtWh(e.totalSolar)
+    var powerSummaryExpanded by remember { mutableStateOf(true) }
+    var inputOutputExpanded by remember { mutableStateOf(true) }
+    var batteryHealthExpanded by remember { mutableStateOf(true) }
 
     Column(
         Modifier
@@ -958,22 +1016,7 @@ fun Dashboard(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                // Connection & Model Status Chip
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (ui.connected) EMERALD.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(0.5.dp, if (ui.connected) EMERALD.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant)
-                ) {
-                    Text(
-                        "${store.model} • ${if (ui.connected) "Connected" else "Disconnected"}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (ui.connected) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                EnergyFlow(s, ui.connected)
+                EnergyFlow(s, ui.connected, store.model)
             }
         }
 
@@ -1022,13 +1065,6 @@ fun Dashboard(
             }
         }
 
-        // Section 1: Power Overview
-        SectionHeader("Power Summary")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("TOTAL INPUT", fmt(s?.inW, " W"), Modifier.weight(1f), accentColor = CYAN)
-            MetricTile("TOTAL OUTPUT", fmt(s?.outW, " W"), Modifier.weight(1f), accentColor = ORANGE)
-        }
-
         val netVal = s?.net ?: 0.0
         val netColor = when {
             netVal > 2 -> EMERALD
@@ -1036,38 +1072,40 @@ fun Dashboard(
             else -> MaterialTheme.colorScheme.onSurface
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("NET POWER", if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net), Modifier.weight(1f), accentColor = netColor)
-            MetricTile("STORED ENERGY", if (s == null) "—" else "${fmtWh(s.storedWh)} / ${fmtWh(s.capWh)}", Modifier.weight(1f))
+        DashboardSection("Power Summary", powerSummaryExpanded, { powerSummaryExpanded = !powerSummaryExpanded }) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("NET POWER", if (s == null) "—" else String.format(Locale.US, "%+.0f W", s.net), Modifier.weight(1f), accentColor = netColor)
+                MetricTile("STORED ENERGY", if (s == null) "—" else "${fmtWh(s.storedWh)} / ${fmtWh(s.capWh)}", Modifier.weight(1f))
+            }
         }
 
-        // Section 2: Input & Output Breakdown
-        SectionHeader("Input & Output Sources")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("☀ SOLAR IN", fmt(s?.solar, " W"), Modifier.weight(1f), accentColor = AMBER)
-            MetricTile("🔌 AC IN", fmt(s?.acIn, " W"), Modifier.weight(1f), accentColor = INDIGO)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("AC OUTPUT", fmt(s?.acOut, " W"), Modifier.weight(1f))
-            MetricTile("12V DC OUT", fmt(s?.car, " W"), Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("USB OUT", fmt(s?.usb, " W"), Modifier.weight(1f))
-            MetricTile("BATTERY TEMP", fmt(s?.temp, " °C"), Modifier.weight(1f))
+        DashboardSection("Input & Output Sources", inputOutputExpanded, { inputOutputExpanded = !inputOutputExpanded }) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("☀ SOLAR IN", fmt(s?.solar, " W"), Modifier.weight(1f), accentColor = AMBER)
+                MetricTile("🔌 AC IN", fmt(s?.acIn, " W"), Modifier.weight(1f), accentColor = INDIGO)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("AC OUTPUT", fmt(s?.acOut, " W"), Modifier.weight(1f))
+                MetricTile("12V DC OUT", fmt(s?.car, " W"), Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("USB OUT", fmt(s?.usb, " W"), Modifier.weight(1f))
+                MetricTile("BATTERY TEMP", fmt(s?.temp, " °C"), Modifier.weight(1f))
+            }
         }
 
-        // Section 3: Battery Health
-        SectionHeader("Battery Health")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricTile("CYCLES / HEALTH", "${fmt(s?.cycles)} / ${fmt(s?.soh, "%")}", Modifier.weight(1f))
-            MetricTile("PACK V / A", "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}", Modifier.weight(1f))
+        DashboardSection("Battery Health", batteryHealthExpanded, { batteryHealthExpanded = !batteryHealthExpanded }) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MetricTile("CYCLES / HEALTH", "${fmt(s?.cycles)} / ${fmt(s?.soh, "%")}", Modifier.weight(1f))
+                MetricTile("PACK V / A", "${fmt(s?.vol, " V", 1)} / ${fmt(s?.amp, " A", 1)}", Modifier.weight(1f))
+            }
         }
         Spacer(Modifier.height(12.dp))
     }
 }
 
 @Composable
-private fun EnergyFlow(s: Summary?, connected: Boolean) {
+private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
     val solarW = s?.solar ?: 0.0
     val acInW = s?.acIn ?: 0.0
     val acOutW = s?.acOut ?: 0.0
@@ -1078,26 +1116,68 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
     val etaText = if (etaMinutes == null) etaLabel else "${fmtMin(etaMinutes)} $etaLabel"
     val netW = s?.net ?: 0.0
     val isLive = connected && s != null
-    val hasActiveFlow = isLive && (solarW > 1.0 || acInW > 1.0 || acOutW > 1.0 || usbW > 1.0 || dcW > 1.0)
-    val flowProgressState = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(hasActiveFlow) {
-        if (!hasActiveFlow) {
-            flowProgressState.floatValue = 0f
+
+    val solarActive = isLive && solarW > 1.0
+    val acInActive = isLive && acInW > 1.0
+    val acOutActive = isLive && acOutW > 1.0
+    val usbActive = isLive && usbW > 1.0
+    val dcActive = isLive && dcW > 1.0
+    val hasActiveFlow = solarActive || acInActive || acOutActive || usbActive || dcActive
+    val motionEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
+
+    val ratedPower = modelPowerMax(model).toFloat().coerceAtLeast(1f)
+    fun flowLevel(power: Double, active: Boolean): Float {
+        if (!active) return 0f
+        val ratio = (power.toFloat() / ratedPower).coerceIn(0f, 1f)
+        return 0.2f + sqrt(ratio) * 0.8f
+    }
+
+    val solarFlowTarget = flowLevel(solarW, solarActive)
+    val acInFlowTarget = flowLevel(acInW, acInActive)
+    val acOutFlowTarget = flowLevel(acOutW, acOutActive)
+    val usbFlowTarget = flowLevel(usbW, usbActive)
+    val dcFlowTarget = flowLevel(dcW, dcActive)
+    val flowTransitionDuration = if (motionEnabled) 420 else 0
+    val solarFlowLevel by animateFloatAsState(solarFlowTarget, tween(flowTransitionDuration, easing = FastOutSlowInEasing), label = "solar-flow-level")
+    val acInFlowLevel by animateFloatAsState(acInFlowTarget, tween(flowTransitionDuration, easing = FastOutSlowInEasing), label = "ac-in-flow-level")
+    val acOutFlowLevel by animateFloatAsState(acOutFlowTarget, tween(flowTransitionDuration, easing = FastOutSlowInEasing), label = "ac-out-flow-level")
+    val usbFlowLevel by animateFloatAsState(usbFlowTarget, tween(flowTransitionDuration, easing = FastOutSlowInEasing), label = "usb-flow-level")
+    val dcFlowLevel by animateFloatAsState(dcFlowTarget, tween(flowTransitionDuration, easing = FastOutSlowInEasing), label = "dc-flow-level")
+
+    val infiniteTransition = rememberInfiniteTransition(label = "energy-flow")
+    var flowProgress by remember { mutableStateOf(0f) }
+    LaunchedEffect(hasActiveFlow, motionEnabled) {
+        if (!hasActiveFlow || !motionEnabled) {
             return@LaunchedEffect
         }
+        val startTime = withFrameNanos { it }
         while (true) {
-            withFrameNanos { frameTimeNanos ->
-                flowProgressState.floatValue =
-                    (frameTimeNanos % 1_800_000_000L).toFloat() / 1_800_000_000f
-            }
+            val frameTime = withFrameNanos { it }
+            flowProgress = ((frameTime - startTime) % 1_800_000_000L).toFloat() / 1_800_000_000f
         }
     }
+    val pulseAlpha = if (isLive && motionEnabled) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse-alpha"
+        ).value
+    } else {
+        1f
+    }
+
     val animatedSoc by animateFloatAsState(
         targetValue = ((soc ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 700),
-        label = "battery-level",
+        animationSpec = tween(durationMillis = if (motionEnabled) 800 else 0),
+        label = "battery-soc",
     )
+
     val trackColor = MaterialTheme.colorScheme.outlineVariant
+    val primaryColor = MaterialTheme.colorScheme.primary
     val batteryColor = when {
         soc == null -> MaterialTheme.colorScheme.onSurfaceVariant
         soc <= 15 -> CRIMSON
@@ -1105,216 +1185,816 @@ private fun EnergyFlow(s: Summary?, connected: Boolean) {
         else -> EMERALD
     }
 
+    val hubBorderColor = when {
+        !isLive -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        netW > 2.0 -> EMERALD.copy(alpha = 0.45f)
+        netW < -2.0 -> ORANGE.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+    }
+
+    // Dynamic layout anchors
+    var boxCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var sourcesRight by remember { mutableStateOf<Float?>(null) }
+    var solarY by remember { mutableStateOf<Float?>(null) }
+    var acInY by remember { mutableStateOf<Float?>(null) }
+    var hubLeft by remember { mutableStateOf<Float?>(null) }
+    var hubRight by remember { mutableStateOf<Float?>(null) }
+    var hubMidY by remember { mutableStateOf<Float?>(null) }
+    var loadsLeft by remember { mutableStateOf<Float?>(null) }
+    var acOutY by remember { mutableStateOf<Float?>(null) }
+    var usbY by remember { mutableStateOf<Float?>(null) }
+    var dcY by remember { mutableStateOf<Float?>(null) }
+
     Column(Modifier.fillMaxWidth()) {
+        // Top Card Header: Icon + Title/Model + Live Chip
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Row(
-                Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f, fill = false),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    "ENERGY FLOW",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    if (isLive) "● LIVE" else "○ WAITING FOR DATA",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isLive) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Box(Modifier.fillMaxWidth().height(210.dp)) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val flowProgress = flowProgressState.floatValue
-                    val leftX = size.width * 0.294f
-                    val centerLeftX = size.width * 0.326f
-                    val centerRightX = size.width * 0.674f
-                    val rightX = size.width * 0.706f
-                    val sourceYs = listOf(0.34f, 0.66f)
-                    val outputYs = listOf(0.24f, 0.50f, 0.76f)
-
-                    fun drawFlow(
-                        start: Offset,
-                        end: Offset,
-                        color: Color,
-                        active: Boolean,
-                        phase: Float,
-                    ) {
-                        val control = Offset((start.x + end.x) / 2f, (start.y + end.y) / 2f)
-                        val path = Path().apply {
-                            moveTo(start.x, start.y)
-                            quadraticTo(control.x, control.y, end.x, end.y)
-                        }
-                        drawPath(
-                            path,
-                            color = trackColor.copy(alpha = 0.7f),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
-                        )
-                        if (!active) return
-
-                        drawPath(
-                            path,
-                            color = color.copy(alpha = 0.5f),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
-                        )
-                        repeat(3) { index ->
-                            val t = (phase + index / 3f) % 1f
-                            val inverse = 1f - t
-                            val point = Offset(
-                                inverse * inverse * start.x + 2f * inverse * t * control.x + t * t * end.x,
-                                inverse * inverse * start.y + 2f * inverse * t * control.y + t * t * end.y,
-                            )
-                            drawCircle(color, radius = 2.4.dp.toPx(), center = point)
-                        }
-                    }
-
-                    sourceYs.forEachIndexed { index, y ->
-                        val watts = if (index == 0) solarW else acInW
-                        drawFlow(
-                            Offset(leftX, size.height * y),
-                            Offset(centerLeftX, size.height * 0.5f),
-                            if (index == 0) AMBER else INDIGO,
-                            isLive && watts > 1.0,
-                            flowProgress,
-                        )
-                    }
-                    outputYs.forEachIndexed { index, y ->
-                        val watts = when (index) {
-                            0 -> acOutW
-                            1 -> usbW
-                            else -> dcW
-                        }
-                        drawFlow(
-                            Offset(centerRightX, size.height * 0.5f),
-                            Offset(rightX, size.height * y),
-                            when (index) {
-                                0 -> ORANGE
-                                1 -> CYAN
-                                else -> EMERALD
-                            },
-                            isLive && watts > 1.0,
-                            flowProgress,
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(
+                            color = if (hasActiveFlow) EMERALD.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Bolt,
+                        contentDescription = null,
+                        tint = if (hasActiveFlow) EMERALD else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        "ENERGY FLOW",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.2.sp,
+                        maxLines = 1,
+                    )
+                    if (model.isNotEmpty()) {
+                        Text(
+                            model,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
+            }
 
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isLive) EMERALD.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(
+                    0.5.dp,
+                    if (isLive) EMERALD.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant
+                )
+            ) {
                 Row(
-                    Modifier.fillMaxSize(),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        EnergyFlowNode("☀", "SOLAR", fmt(s?.solar, " W"), AMBER)
-                        EnergyFlowNode("⚡", "AC IN", fmt(s?.acIn, " W"), INDIGO)
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Surface(
-                        Modifier.weight(1.2f),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
-                        border = BorderStroke(1.dp, batteryColor.copy(alpha = 0.55f)),
-                    ) {
-                        Column(
-                            Modifier.padding(horizontal = 8.dp, vertical = 14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Text("🔋", fontSize = 24.sp)
-                            Text(
-                                "POWER STATION",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .graphicsLayer {
+                                if (isLive) alpha = pulseAlpha
+                            }
+                            .background(
+                                color = if (isLive) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
+                                shape = CircleShape
                             )
-                            Text(
-                                fmt(soc, "%"),
-                                fontSize = 21.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = batteryColor,
-                            )
-                            Text(
-                                etaText,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                            )
-                            LinearProgressIndicator(
-                                progress = { animatedSoc },
-                                modifier = Modifier.fillMaxWidth(0.82f).height(5.dp).clip(CircleShape),
-                                color = batteryColor,
-                                trackColor = trackColor,
-                            )
-                            if (kotlin.math.abs(netW) >= 3) {
-                                Text(
-                                    text = if (netW > 0) "▲ +${netW.toInt()} W" else "▼ ${netW.toInt()} W",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (netW > 0) EMERALD else ORANGE,
-                                    maxLines = 1,
+                    )
+                    Text(
+                        text = if (isLive) "LIVE" else "STANDBY",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isLive) EMERALD else MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 0.6.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        // Main Diagram: Sources Panel, Central Battery Pod, Loads Panel
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(290.dp)
+                .onGloballyPositioned { boxCoordinates = it }
+        ) {
+            // Background Canvas: Glowing Conduits with Organic Curves & Flowing Energy Particles
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+
+                val xSrc = sourcesRight ?: (w * 0.31f)
+                val xBatLeft = hubLeft ?: (w * 0.36f)
+                val xBatRight = hubRight ?: (w * 0.64f)
+                val xLoads = loadsLeft ?: (w * 0.69f)
+                val yBatMid = hubMidY ?: (h * 0.50f)
+                val ySolarVal = solarY ?: (h * 0.30f)
+                val yAcInVal = acInY ?: (h * 0.70f)
+                val yAcOutVal = acOutY ?: (h * 0.24f)
+                val yUsbVal = usbY ?: (h * 0.50f)
+                val yDcVal = dcY ?: (h * 0.76f)
+
+                // Junctions in the inter-panel gaps
+                val inGap = (xBatLeft - xSrc).coerceAtLeast(14.dp.toPx())
+                val xMerge = xBatLeft - inGap * 0.30f
+
+                val outGap = (xLoads - xBatRight).coerceAtLeast(14.dp.toPx())
+                val xSplit = xBatRight + outGap * 0.30f
+
+                // Solar Path: curves down into the merge point and runs horizontal into battery
+                val solarPath = Path().apply {
+                    moveTo(xSrc, ySolarVal)
+                    val c1 = Offset(xSrc + (xMerge - xSrc) * 0.55f, ySolarVal)
+                    val c2 = Offset(xSrc + (xMerge - xSrc) * 0.45f, yBatMid)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, xMerge, yBatMid)
+                    lineTo(xBatLeft, yBatMid)
+                }
+
+                // Grid In Path: curves up into the merge point and runs horizontal into battery
+                val acInPath = Path().apply {
+                    moveTo(xSrc, yAcInVal)
+                    val c1 = Offset(xSrc + (xMerge - xSrc) * 0.55f, yAcInVal)
+                    val c2 = Offset(xSrc + (xMerge - xSrc) * 0.45f, yBatMid)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, xMerge, yBatMid)
+                    lineTo(xBatLeft, yBatMid)
+                }
+
+                // AC Out Path: from battery, through split point, curves up to AC Out
+                val acOutPath = Path().apply {
+                    moveTo(xBatRight, yBatMid)
+                    lineTo(xSplit, yBatMid)
+                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
+                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yAcOutVal)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yAcOutVal)
+                }
+
+                // USB Path: from battery, through split point, to USB
+                val usbPath = Path().apply {
+                    moveTo(xBatRight, yBatMid)
+                    lineTo(xSplit, yBatMid)
+                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
+                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yUsbVal)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yUsbVal)
+                }
+
+                // 12V DC Path: from battery, through split point, curves down to 12V DC
+                val dcPath = Path().apply {
+                    moveTo(xBatRight, yBatMid)
+                    lineTo(xSplit, yBatMid)
+                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
+                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yDcVal)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yDcVal)
+                }
+
+                fun drawConduit(
+                    path: Path,
+                    color: Color,
+                    flowLevel: Float,
+                    startPort: Offset,
+                    endPort: Offset,
+                ) {
+                    val strength = flowLevel.coerceIn(0f, 1f)
+                    drawPath(
+                        path = path,
+                        color = trackColor.copy(alpha = 0.32f),
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    drawCircle(trackColor.copy(alpha = 0.45f), radius = 2.2.dp.toPx(), center = startPort)
+                    drawCircle(trackColor.copy(alpha = 0.45f), radius = 2.2.dp.toPx(), center = endPort)
+                    if (strength <= 0.01f) return
+
+                    // Terminal connection points with glowing halo
+                    drawCircle(color.copy(alpha = 0.25f * strength), radius = 4.5.dp.toPx(), center = startPort)
+                    drawCircle(color.copy(alpha = strength), radius = 2.2.dp.toPx(), center = startPort)
+                    drawCircle(color.copy(alpha = 0.25f * strength), radius = 4.5.dp.toPx(), center = endPort)
+                    drawCircle(color.copy(alpha = strength), radius = 2.2.dp.toPx(), center = endPort)
+
+                    // Ambient outer glow
+                    drawPath(
+                        path = path,
+                        color = color.copy(alpha = 0.12f + 0.12f * strength),
+                        style = Stroke(width = (6f + 5f * strength).dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    // Core illuminated conduit line
+                    drawPath(
+                        path = path,
+                        color = color.copy(alpha = 0.45f + 0.5f * strength),
+                        style = Stroke(width = (2f + 1.4f * strength).dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    // Moving energy pulses with comet tails along the path
+                    val pathMeasure = PathMeasure()
+                    pathMeasure.setPath(path, false)
+                    val len = pathMeasure.length
+                    if (len > 0f) {
+                        val particleCount = 3
+                        val speed = 0.55f + strength * 1.2f
+                        for (i in 0 until particleCount) {
+                            val t = (flowProgress * speed + i.toFloat() / particleCount) % 1f
+                            val headPos = pathMeasure.getPosition(t * len)
+                            if (headPos != Offset.Unspecified) {
+                                // Tapered comet tail: 5 stepped positions behind the head
+                                for (step in 5 downTo 1) {
+                                    val frac = step.toFloat() / 5f
+                                    val tailT = (t - frac * 0.08f + 1f) % 1f
+                                    val tailPos = pathMeasure.getPosition(tailT * len)
+                                    if (tailPos != Offset.Unspecified) {
+                                        val stepAlpha = (1f - frac) * (0.3f + 0.5f * strength)
+                                        val stepRadius = (1.2f + (1f - frac) * (1.2f + strength)).dp.toPx()
+                                        drawCircle(
+                                            color = color.copy(alpha = stepAlpha),
+                                            radius = stepRadius,
+                                            center = tailPos
+                                        )
+                                    }
+                                }
+                                // Glowing energy bead head
+                                drawCircle(
+                                    color = color.copy(alpha = 0.25f + 0.4f * strength),
+                                    radius = (4f + 2.5f * strength).dp.toPx(),
+                                    center = headPos
+                                )
+                                drawCircle(
+                                    color = color.copy(alpha = strength),
+                                    radius = (2f + 1f * strength).dp.toPx(),
+                                    center = headPos
+                                )
+                                drawCircle(
+                                    color = Color.White.copy(alpha = 0.55f + 0.4f * strength),
+                                    radius = (1f + 0.4f * strength).dp.toPx(),
+                                    center = headPos
                                 )
                             }
                         }
                     }
-                    Spacer(Modifier.width(10.dp))
+                }
+
+                // Sources -> Battery Hub
+                drawConduit(solarPath, AMBER, solarFlowLevel, Offset(xSrc, ySolarVal), Offset(xBatLeft, yBatMid))
+                drawConduit(acInPath, INDIGO, acInFlowLevel, Offset(xSrc, yAcInVal), Offset(xBatLeft, yBatMid))
+
+                // Battery Hub -> Output Loads
+                drawConduit(acOutPath, ORANGE, acOutFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yAcOutVal))
+                drawConduit(usbPath, CYAN, usbFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yUsbVal))
+                drawConduit(dcPath, EMERALD, dcFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yDcVal))
+
+                // Junction connector dots
+                drawCircle(
+                    color = if (solarActive || acInActive) (if (solarActive) AMBER else INDIGO).copy(alpha = 0.7f) else trackColor.copy(alpha = 0.4f),
+                    radius = 2.2.dp.toPx(),
+                    center = Offset(xMerge, yBatMid)
+                )
+                drawCircle(
+                    color = if (acOutActive || usbActive || dcActive) primaryColor.copy(alpha = 0.7f) else trackColor.copy(alpha = 0.4f),
+                    radius = 2.2.dp.toPx(),
+                    center = Offset(xSplit, yBatMid)
+                )
+            }
+
+            // Three-Column Structural Layout
+            Row(
+                Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // LEFT: SOURCES Enclosure Card
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .onGloballyPositioned { coords ->
+                            boxCoordinates?.let { parent ->
+                                if (coords.isAttached && parent.isAttached) {
+                                    sourcesRight = parent.localPositionOf(coords, Offset(coords.size.width.toFloat(), 0f)).x
+                                }
+                            }
+                        },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ) {
                     Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        EnergyFlowNode("▣", "AC OUT", fmt(s?.acOut, " W"), ORANGE)
-                        EnergyFlowNode("⌁", "USB", fmt(s?.usb, " W"), CYAN)
-                        EnergyFlowNode("⚡", "12V DC", fmt(s?.car, " W"), EMERALD)
+                        Text(
+                            text = "SOURCES",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            EnergyFlowSubCard(
+                                icon = Icons.Rounded.WbSunny,
+                                label = "SOLAR",
+                                value = fmt(s?.solar, " W"),
+                                color = AMBER,
+                                active = solarActive,
+                                motionEnabled = motionEnabled,
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    boxCoordinates?.let { parent ->
+                                        if (coords.isAttached && parent.isAttached) {
+                                            solarY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                        }
+                                    }
+                                }
+                            )
+                            EnergyFlowSubCard(
+                                icon = Icons.Rounded.Bolt,
+                                label = "GRID IN",
+                                value = fmt(s?.acIn, " W"),
+                                color = INDIGO,
+                                active = acInActive,
+                                motionEnabled = motionEnabled,
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    boxCoordinates?.let { parent ->
+                                        if (coords.isAttached && parent.isAttached) {
+                                            acInY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // CENTER: BATTERY Hero Station Card
+                Surface(
+                    modifier = Modifier
+                        .weight(1.28f)
+                        .fillMaxHeight()
+                        .padding(horizontal = 8.dp)
+                        .onGloballyPositioned { coords ->
+                            boxCoordinates?.let { parent ->
+                                if (coords.isAttached && parent.isAttached) {
+                                    hubLeft = parent.localPositionOf(coords, Offset.Zero).x
+                                    hubRight = parent.localPositionOf(coords, Offset(coords.size.width.toFloat(), 0f)).x
+                                    hubMidY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                }
+                            }
+                        },
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, hubBorderColor),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        // Open Crescent Circular Arc Battery Gauge (270 degrees)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(88.dp)
+                                .padding(top = 2.dp)
+                        ) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                val strokeWidthPx = 6.5.dp.toPx()
+                                val radius = (size.minDimension - strokeWidthPx) / 2f
+                                val arcCenter = Offset(size.width / 2f, size.height / 2f)
+                                val arcTopLeft = Offset(arcCenter.x - radius, arcCenter.y - radius)
+                                val arcSize = Size(radius * 2f, radius * 2f)
+
+                                val totalSweep = 270f
+                                val startAngle = 135f // Opens at bottom
+
+                                // Background track
+                                drawArc(
+                                    color = trackColor.copy(alpha = 0.22f),
+                                    startAngle = startAngle,
+                                    sweepAngle = totalSweep,
+                                    useCenter = false,
+                                    topLeft = arcTopLeft,
+                                    size = arcSize,
+                                    style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                                )
+
+                                // Active progress sweep
+                                if (animatedSoc > 0.005f) {
+                                    val progressSweep = (animatedSoc * totalSweep).coerceIn(0f, totalSweep)
+                                    val activeBrush = Brush.linearGradient(
+                                        colors = when {
+                                            soc == null -> listOf(trackColor, trackColor)
+                                            soc <= 15 -> listOf(CRIMSON, Color(0xFFF87171))
+                                            soc <= 30 -> listOf(AMBER, Color(0xFFFDE047))
+                                            else -> listOf(CYAN, EMERALD)
+                                        },
+                                        start = Offset(arcTopLeft.x, arcCenter.y),
+                                        end = Offset(arcTopLeft.x + arcSize.width, arcCenter.y)
+                                    )
+                                    drawArc(
+                                        brush = activeBrush,
+                                        startAngle = startAngle,
+                                        sweepAngle = progressSweep,
+                                        useCenter = false,
+                                        topLeft = arcTopLeft,
+                                        size = arcSize,
+                                        style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                                    )
+                                }
+                            }
+
+                            // Center Battery Icon & Large Percentage
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.BatteryFull,
+                                    contentDescription = null,
+                                    tint = batteryColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = if (soc == null) "—%" else "${soc.toInt()}%",
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    letterSpacing = (-0.5).sp
+                                )
+                            }
+                        }
+
+                        // BATTERY Label
+                        Text(
+                            text = "BATTERY",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            letterSpacing = 1.sp,
+                            maxLines = 1,
+                        )
+
+                        // Dynamic Net Power Badge
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = when {
+                                !isLive -> MaterialTheme.colorScheme.surfaceVariant
+                                netW > 2.0 -> EMERALD.copy(alpha = 0.15f)
+                                netW < -2.0 -> ORANGE.copy(alpha = 0.15f)
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            border = BorderStroke(
+                                0.5.dp,
+                                when {
+                                    !isLive -> MaterialTheme.colorScheme.outlineVariant
+                                    netW > 2.0 -> EMERALD.copy(alpha = 0.5f)
+                                    netW < -2.0 -> ORANGE.copy(alpha = 0.5f)
+                                    else -> MaterialTheme.colorScheme.outlineVariant
+                                }
+                            )
+                        ) {
+                            Text(
+                                text = when {
+                                    !isLive -> "— W"
+                                    netW > 2.0 -> "+${netW.toInt()} W"
+                                    netW < -2.0 -> "${netW.toInt()} W"
+                                    else -> "0 W Idle"
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = when {
+                                    !isLive -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    netW > 2.0 -> EMERALD
+                                    netW < -2.0 -> ORANGE
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                maxLines = 1
+                            )
+                        }
+
+                        // ETA / Idle state
+                        Text(
+                            text = etaText,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        // Stored Energy / Capacity (e.g. 230 Wh / 256 Wh)
+                        if (s != null && s.capWh > 0) {
+                            Text(
+                                text = "${fmtWh(s.storedWh)} / ${fmtWh(s.capWh)}",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                maxLines = 1
+                            )
+                        } else {
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    }
+                }
+
+                // RIGHT: LOADS Enclosure Card
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .onGloballyPositioned { coords ->
+                            boxCoordinates?.let { parent ->
+                                if (coords.isAttached && parent.isAttached) {
+                                    loadsLeft = parent.localPositionOf(coords, Offset.Zero).x
+                                }
+                            }
+                        },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = "LOADS",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            EnergyFlowSubCard(
+                                icon = Icons.Rounded.Power,
+                                label = "AC OUT",
+                                value = fmt(s?.acOut, " W"),
+                                color = ORANGE,
+                                active = acOutActive,
+                                motionEnabled = motionEnabled,
+                                isCompact = true,
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    boxCoordinates?.let { parent ->
+                                        if (coords.isAttached && parent.isAttached) {
+                                            acOutY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                        }
+                                    }
+                                }
+                            )
+                            EnergyFlowSubCard(
+                                icon = Icons.Rounded.Usb,
+                                label = "USB",
+                                value = fmt(s?.usb, " W"),
+                                color = CYAN,
+                                active = usbActive,
+                                motionEnabled = motionEnabled,
+                                isCompact = true,
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    boxCoordinates?.let { parent ->
+                                        if (coords.isAttached && parent.isAttached) {
+                                            usbY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                        }
+                                    }
+                                }
+                            )
+                            EnergyFlowSubCard(
+                                icon = Icons.Rounded.DirectionsCar,
+                                label = "12V DC",
+                                value = fmt(s?.car, " W"),
+                                color = EMERALD,
+                                active = dcActive,
+                                motionEnabled = motionEnabled,
+                                isCompact = true,
+                                modifier = Modifier.onGloballyPositioned { coords ->
+                                    boxCoordinates?.let { parent ->
+                                        if (coords.isAttached && parent.isAttached) {
+                                            dcY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bottom Summary Bar: TOTAL IN & TOTAL OUT Cards
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                color = CYAN.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, CYAN.copy(alpha = 0.28f)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(CYAN.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDownward,
+                            contentDescription = null,
+                            tint = CYAN,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            "TOTAL IN",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                        )
+                        Text(
+                            fmt(s?.inW, " W"),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = CYAN,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                color = ORANGE.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, ORANGE.copy(alpha = 0.28f)),
             ) {
-                Text("IN  ${fmt(s?.inW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CYAN)
-                Text("OUT  ${fmt(s?.outW, " W")}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ORANGE)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(ORANGE.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowUpward,
+                            contentDescription = null,
+                            tint = ORANGE,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            "TOTAL OUT",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                        )
+                        Text(
+                            fmt(s?.outW, " W"),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = ORANGE,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
+        }
     }
 }
 
 @Composable
-private fun EnergyFlowNode(icon: String, label: String, value: String, color: Color) {
+private fun EnergyFlowSubCard(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    color: Color,
+    active: Boolean,
+    motionEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
+) {
+    val activeLevel by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (motionEnabled) 320 else 0,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "energy-flow-card-active",
+    )
+    val surfaceColor = lerp(
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.40f),
+        color.copy(alpha = 0.10f),
+        activeLevel,
+    )
+    val borderColor = lerp(
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+        color.copy(alpha = 0.6f),
+        activeLevel,
+    )
+    val contentColor = lerp(
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        color,
+        activeLevel,
+    )
+    val valueColor = lerp(
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        color,
+        activeLevel,
+    )
+
     Surface(
-        Modifier.fillMaxWidth().height(52.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(if (isCompact) 56.dp else 70.dp),
         shape = RoundedCornerShape(13.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+        color = surfaceColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Column(
-            Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = if (isCompact) 5.dp else 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(icon, fontSize = 11.sp, color = color)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(if (isCompact) 11.dp else 13.dp)
+                )
                 Text(
-                    label,
-                    fontSize = 9.sp,
+                    text = label,
+                    fontSize = if (isCompact) 8.5.sp else 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = contentColor,
+                    letterSpacing = 0.4.sp,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+            Spacer(Modifier.height(if (isCompact) 2.dp else 4.dp))
             Text(
-                value,
-                fontSize = 12.sp,
+                text = value,
+                fontSize = if (isCompact) 13.sp else 14.5.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = color,
+                color = valueColor,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
