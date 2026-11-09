@@ -52,7 +52,8 @@ class UpdateManager(
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            if (intent.resolveActivity(context.packageManager) == null) return
+            val resolvedActivity = context.packageManager.resolveActivity(intent, 0) ?: return
+            intent.`package` = resolvedActivity.activityInfo.packageName
             val pendingIntent = PendingIntent.getActivity(
                 context.applicationContext,
                 0,
