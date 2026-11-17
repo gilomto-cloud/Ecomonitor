@@ -1194,15 +1194,18 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
 
     // Dynamic layout anchors
     var boxCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var sourcesRight by remember { mutableStateOf<Float?>(null) }
+    var solarX by remember { mutableStateOf<Float?>(null) }
     var solarY by remember { mutableStateOf<Float?>(null) }
+    var acInX by remember { mutableStateOf<Float?>(null) }
     var acInY by remember { mutableStateOf<Float?>(null) }
-    var hubLeft by remember { mutableStateOf<Float?>(null) }
-    var hubRight by remember { mutableStateOf<Float?>(null) }
-    var hubMidY by remember { mutableStateOf<Float?>(null) }
-    var loadsLeft by remember { mutableStateOf<Float?>(null) }
+    var hubMidX by remember { mutableStateOf<Float?>(null) }
+    var hubTop by remember { mutableStateOf<Float?>(null) }
+    var hubBottom by remember { mutableStateOf<Float?>(null) }
+    var acOutX by remember { mutableStateOf<Float?>(null) }
     var acOutY by remember { mutableStateOf<Float?>(null) }
+    var usbX by remember { mutableStateOf<Float?>(null) }
     var usbY by remember { mutableStateOf<Float?>(null) }
+    var dcX by remember { mutableStateOf<Float?>(null) }
     var dcY by remember { mutableStateOf<Float?>(null) }
 
     Column(Modifier.fillMaxWidth()) {
@@ -1293,11 +1296,11 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
             }
         }
 
-        // Main Diagram: Sources Panel, Central Battery Pod, Loads Panel
+        // Main Diagram: Sources above the Battery, Loads below
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(290.dp)
+                .height(484.dp)
                 .onGloballyPositioned { boxCoordinates = it }
         ) {
             // Background Canvas: Glowing Conduits with Organic Curves & Flowing Energy Particles
@@ -1305,67 +1308,46 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                 val w = size.width
                 val h = size.height
 
-                val xSrc = sourcesRight ?: (w * 0.31f)
-                val xBatLeft = hubLeft ?: (w * 0.36f)
-                val xBatRight = hubRight ?: (w * 0.64f)
-                val xLoads = loadsLeft ?: (w * 0.69f)
-                val yBatMid = hubMidY ?: (h * 0.50f)
-                val ySolarVal = solarY ?: (h * 0.30f)
-                val yAcInVal = acInY ?: (h * 0.70f)
-                val yAcOutVal = acOutY ?: (h * 0.24f)
-                val yUsbVal = usbY ?: (h * 0.50f)
-                val yDcVal = dcY ?: (h * 0.76f)
+                val xSolar = solarX ?: (w * 0.34f)
+                val xAcIn = acInX ?: (w * 0.66f)
+                val xHub = hubMidX ?: (w * 0.5f)
+                val xAcOut = acOutX ?: (w * 0.25f)
+                val xUsb = usbX ?: (w * 0.5f)
+                val xDc = dcX ?: (w * 0.75f)
+                val ySolar = solarY ?: (h * 0.16f)
+                val yAcIn = acInY ?: (h * 0.16f)
+                val yHubTop = hubTop ?: (h * 0.39f)
+                val yHubBottom = hubBottom ?: (h * 0.63f)
+                val yAcOut = acOutY ?: (h * 0.84f)
+                val yUsb = usbY ?: (h * 0.84f)
+                val yDc = dcY ?: (h * 0.84f)
+                val yMerge = yHubTop - 8.dp.toPx()
+                val ySplit = yHubBottom + 8.dp.toPx()
 
-                // Junctions in the inter-panel gaps
-                val inGap = (xBatLeft - xSrc).coerceAtLeast(14.dp.toPx())
-                val xMerge = xBatLeft - inGap * 0.30f
-
-                val outGap = (xLoads - xBatRight).coerceAtLeast(14.dp.toPx())
-                val xSplit = xBatRight + outGap * 0.30f
-
-                // Solar Path: curves down into the merge point and runs horizontal into battery
                 val solarPath = Path().apply {
-                    moveTo(xSrc, ySolarVal)
-                    val c1 = Offset(xSrc + (xMerge - xSrc) * 0.55f, ySolarVal)
-                    val c2 = Offset(xSrc + (xMerge - xSrc) * 0.45f, yBatMid)
-                    cubicTo(c1.x, c1.y, c2.x, c2.y, xMerge, yBatMid)
-                    lineTo(xBatLeft, yBatMid)
+                    moveTo(xSolar, ySolar)
+                    cubicTo(xSolar, yMerge, xHub, yMerge, xHub, yMerge)
+                    lineTo(xHub, yHubTop)
                 }
-
-                // Grid In Path: curves up into the merge point and runs horizontal into battery
                 val acInPath = Path().apply {
-                    moveTo(xSrc, yAcInVal)
-                    val c1 = Offset(xSrc + (xMerge - xSrc) * 0.55f, yAcInVal)
-                    val c2 = Offset(xSrc + (xMerge - xSrc) * 0.45f, yBatMid)
-                    cubicTo(c1.x, c1.y, c2.x, c2.y, xMerge, yBatMid)
-                    lineTo(xBatLeft, yBatMid)
+                    moveTo(xAcIn, yAcIn)
+                    cubicTo(xAcIn, yMerge, xHub, yMerge, xHub, yMerge)
+                    lineTo(xHub, yHubTop)
                 }
-
-                // AC Out Path: from battery, through split point, curves up to AC Out
                 val acOutPath = Path().apply {
-                    moveTo(xBatRight, yBatMid)
-                    lineTo(xSplit, yBatMid)
-                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
-                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yAcOutVal)
-                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yAcOutVal)
+                    moveTo(xHub, yHubBottom)
+                    lineTo(xHub, ySplit)
+                    cubicTo(xHub, ySplit, xAcOut, ySplit, xAcOut, yAcOut)
                 }
-
-                // USB Path: from battery, through split point, to USB
                 val usbPath = Path().apply {
-                    moveTo(xBatRight, yBatMid)
-                    lineTo(xSplit, yBatMid)
-                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
-                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yUsbVal)
-                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yUsbVal)
+                    moveTo(xHub, yHubBottom)
+                    lineTo(xHub, ySplit)
+                    cubicTo(xHub, ySplit, xUsb, ySplit, xUsb, yUsb)
                 }
-
-                // 12V DC Path: from battery, through split point, curves down to 12V DC
                 val dcPath = Path().apply {
-                    moveTo(xBatRight, yBatMid)
-                    lineTo(xSplit, yBatMid)
-                    val c1 = Offset(xSplit + (xLoads - xSplit) * 0.45f, yBatMid)
-                    val c2 = Offset(xSplit + (xLoads - xSplit) * 0.55f, yDcVal)
-                    cubicTo(c1.x, c1.y, c2.x, c2.y, xLoads, yDcVal)
+                    moveTo(xHub, yHubBottom)
+                    lineTo(xHub, ySplit)
+                    cubicTo(xHub, ySplit, xDc, ySplit, xDc, yDc)
                 }
 
                 fun drawConduit(
@@ -1453,45 +1435,38 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                 }
 
                 // Sources -> Battery Hub
-                drawConduit(solarPath, AMBER, solarFlowLevel, Offset(xSrc, ySolarVal), Offset(xBatLeft, yBatMid))
-                drawConduit(acInPath, INDIGO, acInFlowLevel, Offset(xSrc, yAcInVal), Offset(xBatLeft, yBatMid))
+                drawConduit(solarPath, AMBER, solarFlowLevel, Offset(xSolar, ySolar), Offset(xHub, yHubTop))
+                drawConduit(acInPath, INDIGO, acInFlowLevel, Offset(xAcIn, yAcIn), Offset(xHub, yHubTop))
 
                 // Battery Hub -> Output Loads
-                drawConduit(acOutPath, ORANGE, acOutFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yAcOutVal))
-                drawConduit(usbPath, CYAN, usbFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yUsbVal))
-                drawConduit(dcPath, EMERALD, dcFlowLevel, Offset(xBatRight, yBatMid), Offset(xLoads, yDcVal))
+                drawConduit(acOutPath, ORANGE, acOutFlowLevel, Offset(xHub, yHubBottom), Offset(xAcOut, yAcOut))
+                drawConduit(usbPath, CYAN, usbFlowLevel, Offset(xHub, yHubBottom), Offset(xUsb, yUsb))
+                drawConduit(dcPath, EMERALD, dcFlowLevel, Offset(xHub, yHubBottom), Offset(xDc, yDc))
 
                 // Junction connector dots
                 drawCircle(
                     color = if (solarActive || acInActive) (if (solarActive) AMBER else INDIGO).copy(alpha = 0.7f) else trackColor.copy(alpha = 0.4f),
                     radius = 2.2.dp.toPx(),
-                    center = Offset(xMerge, yBatMid)
+                    center = Offset(xHub, yMerge)
                 )
                 drawCircle(
                     color = if (acOutActive || usbActive || dcActive) primaryColor.copy(alpha = 0.7f) else trackColor.copy(alpha = 0.4f),
                     radius = 2.2.dp.toPx(),
-                    center = Offset(xSplit, yBatMid)
+                    center = Offset(xHub, ySplit)
                 )
             }
 
-            // Three-Column Structural Layout
-            Row(
+            // Vertical Structural Layout
+            Column(
                 Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                // LEFT: SOURCES Enclosure Card
+                // TOP: SOURCES Enclosure Card
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .onGloballyPositioned { coords ->
-                            boxCoordinates?.let { parent ->
-                                if (coords.isAttached && parent.isAttached) {
-                                    sourcesRight = parent.localPositionOf(coords, Offset(coords.size.width.toFloat(), 0f)).x
-                                }
-                            }
-                        },
+                        .fillMaxWidth()
+                        .height(120.dp),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -1510,10 +1485,10 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                             letterSpacing = 1.sp,
                             modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
                         )
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             EnergyFlowSubCard(
                                 icon = Icons.Rounded.WbSunny,
@@ -1522,10 +1497,12 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                                 color = AMBER,
                                 active = solarActive,
                                 motionEnabled = motionEnabled,
-                                modifier = Modifier.onGloballyPositioned { coords ->
+                                modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
                                     boxCoordinates?.let { parent ->
                                         if (coords.isAttached && parent.isAttached) {
-                                            solarY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                            val center = parent.localPositionOf(coords, Offset(coords.size.width / 2f, coords.size.height.toFloat()))
+                                            solarX = center.x
+                                            solarY = center.y
                                         }
                                     }
                                 }
@@ -1537,10 +1514,12 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                                 color = INDIGO,
                                 active = acInActive,
                                 motionEnabled = motionEnabled,
-                                modifier = Modifier.onGloballyPositioned { coords ->
+                                modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
                                     boxCoordinates?.let { parent ->
                                         if (coords.isAttached && parent.isAttached) {
-                                            acInY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                            val center = parent.localPositionOf(coords, Offset(coords.size.width / 2f, coords.size.height.toFloat()))
+                                            acInX = center.x
+                                            acInY = center.y
                                         }
                                     }
                                 }
@@ -1552,15 +1531,14 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                 // CENTER: BATTERY Hero Station Card
                 Surface(
                     modifier = Modifier
-                        .weight(1.28f)
-                        .fillMaxHeight()
-                        .padding(horizontal = 8.dp)
+                        .fillMaxWidth(0.62f)
+                        .height(204.dp)
                         .onGloballyPositioned { coords ->
                             boxCoordinates?.let { parent ->
                                 if (coords.isAttached && parent.isAttached) {
-                                    hubLeft = parent.localPositionOf(coords, Offset.Zero).x
-                                    hubRight = parent.localPositionOf(coords, Offset(coords.size.width.toFloat(), 0f)).x
-                                    hubMidY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                    hubMidX = parent.localPositionOf(coords, Offset(coords.size.width / 2f, 0f)).x
+                                    hubTop = parent.localPositionOf(coords, Offset(0f, 0f)).y
+                                    hubBottom = parent.localPositionOf(coords, Offset(0f, coords.size.height.toFloat())).y
                                 }
                             }
                         },
@@ -1571,7 +1549,7 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -1724,18 +1702,11 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                     }
                 }
 
-                // RIGHT: LOADS Enclosure Card
+                // BOTTOM: LOADS Enclosure Card
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .onGloballyPositioned { coords ->
-                            boxCoordinates?.let { parent ->
-                                if (coords.isAttached && parent.isAttached) {
-                                    loadsLeft = parent.localPositionOf(coords, Offset.Zero).x
-                                }
-                            }
-                        },
+                        .fillMaxWidth()
+                        .height(112.dp),
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -1754,10 +1725,10 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                             letterSpacing = 1.sp,
                             modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
                         )
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             EnergyFlowSubCard(
                                 icon = Icons.Rounded.Power,
@@ -1767,10 +1738,12 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                                 active = acOutActive,
                                 motionEnabled = motionEnabled,
                                 isCompact = true,
-                                modifier = Modifier.onGloballyPositioned { coords ->
+                                modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
                                     boxCoordinates?.let { parent ->
                                         if (coords.isAttached && parent.isAttached) {
-                                            acOutY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                            val center = parent.localPositionOf(coords, Offset(coords.size.width / 2f, 0f))
+                                            acOutX = center.x
+                                            acOutY = center.y
                                         }
                                     }
                                 }
@@ -1783,10 +1756,12 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                                 active = usbActive,
                                 motionEnabled = motionEnabled,
                                 isCompact = true,
-                                modifier = Modifier.onGloballyPositioned { coords ->
+                                modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
                                     boxCoordinates?.let { parent ->
                                         if (coords.isAttached && parent.isAttached) {
-                                            usbY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                            val center = parent.localPositionOf(coords, Offset(coords.size.width / 2f, 0f))
+                                            usbX = center.x
+                                            usbY = center.y
                                         }
                                     }
                                 }
@@ -1799,10 +1774,12 @@ private fun EnergyFlow(s: Summary?, connected: Boolean, model: String = "") {
                                 active = dcActive,
                                 motionEnabled = motionEnabled,
                                 isCompact = true,
-                                modifier = Modifier.onGloballyPositioned { coords ->
+                                modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
                                     boxCoordinates?.let { parent ->
                                         if (coords.isAttached && parent.isAttached) {
-                                            dcY = parent.localPositionOf(coords, Offset(0f, coords.size.height / 2f)).y
+                                            val center = parent.localPositionOf(coords, Offset(coords.size.width / 2f, 0f))
+                                            dcX = center.x
+                                            dcY = center.y
                                         }
                                     }
                                 }
